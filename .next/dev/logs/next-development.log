@@ -1,0 +1,8 @@
+[00:00:01.192] Server  LOG     ✓ Ready in 916ms
+[00:00:06.298] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:00:13.043] Browser INFO    disconnect from room {"pID":"PA_owip7DL3Mr42","participant":"viewer-5kgk5","room":"debate-room","roomID":"RM_Nfizveazh9Ee"}
+[00:00:13.710] Browser INFO    publishing track {"enabled":true,"kind":"audio","muted":false,"pID":"PA_v5hgTHQU9EAW","participant":"debater-t2xru8","room":"debate-room","roomID":"RM_Nfizveazh9Ee","source":"microphone","streamID":"452dc024-3434-4b00-abb5-f8e1b22ea9b2","streamTrackID":"452dc024-3434-4b00-abb5-f8e1b22ea9b2"}
+[00:00:15.021] Browser INFO    publishing track {"enabled":true,"kind":"video","muted":false,"pID":"PA_v5hgTHQU9EAW","participant":"debater-t2xru8","room":"debate-room","roomID":"RM_Nfizveazh9Ee","source":"camera","streamID":"7da1827d-7e91-4f91-b5f1-2bf75fda54a5","streamTrackID":"7da1827d-7e91-4f91-b5f1-2bf75fda54a5"}
+[00:08:25.134] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:08:33.308] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:09:27.844] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
