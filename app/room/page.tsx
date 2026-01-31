@@ -158,7 +158,7 @@ export default function DebateRoom() {
     const fetchToken = async () => {
       try {
         setToken('');
-        const API_URL = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:4000';
+        const API_URL = process.env.NEXT_PUBLIC_WS_URL || 'http://localhost:4000';
         const participantName = `${role}-${Math.random().toString(36).substring(7)}`;
         const lkRole = role === 'debater' ? 'debater' : 'viewer';
         const res = await fetch(`${API_URL}/api/token?roomName=debate-room&participantName=${participantName}&role=${lkRole}`);
@@ -179,13 +179,19 @@ export default function DebateRoom() {
 
   useEffect(() => {
     if (socketRef.current) return;
-    const API_URL = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:4000';
+    const API_URL = process.env.NEXT_PUBLIC_WS_URL || 'http://localhost:4000';
+    console.log('Connecting to socket:', API_URL);
     const socket = io(API_URL, { 
       transports: ['websocket', 'polling'],
-      query: { roomId: 'debate-room' }
+      query: { roomId: 'debate-room' },
+      withCredentials: true,
+      reconnection: true
     });
     socketRef.current = socket;
 
+    socket.on('connect', () => console.log('✅ SOCKET CONNECTED:', socket.id));
+    socket.on('connect_error', (err) => console.error('❌ SOCKET ERROR:', err));
+    socket.on('disconnect', (reason) => console.log('⚠️ SOCKET DISCONNECTED:', reason));
     socket.on('state_update', setServerState);
     socket.on('chat_update', (newMsg: Message) => {
       setMessages(prev => { if (prev.some(m => m.id === newMsg.id)) return prev; return [...prev, newMsg]; });
