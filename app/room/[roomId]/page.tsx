@@ -46,39 +46,60 @@ function getApiUrl() {
 }
 
 // --- Custom Smart View ---
+// --- Custom Smart View ---
 function DualSpeakerView({ activePlayer }: { activePlayer: 'A' | 'B' | null }) {
   const tracks = useTracks([Track.Source.Camera]);
+  // Логируем треки для отладки
+  console.log("🎥 Tracks:", tracks);
+
   const trackA = tracks[0];
   const trackB = tracks[1];
 
   return (
-    <div className="flex flex-col md:flex-row h-full w-full bg-black p-1 gap-1 min-h-[50vh]">
+    // FIX: Убрали min-h-[50vh], добавили h-full w-full и flex-grow
+    <div className="flex flex-col md:flex-row w-full h-full bg-black gap-1 p-1">
+      
       {/* ИГРОК A (RED) */}
-      <div className={`flex-1 relative rounded-lg overflow-hidden border-4 ${activePlayer === 'A' ? 'border-red-500 ring-4 ring-red-500/50' : 'border-transparent opacity-60'} transition-all`}>
+      <div className={`flex-1 relative rounded-lg overflow-hidden border-4 ${activePlayer === 'A' ? 'border-red-500 ring-4 ring-red-500/50' : 'border-transparent'} transition-all min-h-0`}>
         {trackA ? (
           <ParticipantTile trackRef={trackA} className="h-full w-full object-cover" />
         ) : (
-          <div className="flex items-center justify-center h-full bg-gray-900">
-            <span className="text-slate-500 text-lg font-mono">🔴 &nbsp; Waiting Red...</span>
+          <div className="flex flex-col items-center justify-center h-full bg-gray-900 text-center p-4">
+            <div className="animate-pulse text-red-500 mb-2">●</div>
+            <span className="text-slate-500 text-sm md:text-lg font-mono">Waiting Red...</span>
           </div>
         )}
-        <div className="absolute bottom-2 left-2 bg-red-600 text-white px-3 py-1 rounded-full text-xs font-bold uppercase">Red</div>
+        {trackA && (
+           <div className="absolute top-2 left-2 bg-black/50 text-white px-2 py-1 text-xs rounded truncate max-w-[80%]">
+             {trackA.participant.identity}
+           </div>
+        )}
+        <div className="absolute bottom-2 left-2 bg-red-600 text-white px-2 py-0.5 rounded text-[10px] md:text-xs font-bold uppercase">Red</div>
       </div>
 
       {/* ИГРОК B (BLUE) */}
-      <div className={`flex-1 relative rounded-lg overflow-hidden border-4 ${activePlayer === 'B' ? 'border-blue-500 ring-4 ring-blue-500/50' : 'border-transparent opacity-60'} transition-all`}>
+      <div className={`flex-1 relative rounded-lg overflow-hidden border-4 ${activePlayer === 'B' ? 'border-blue-500 ring-4 ring-blue-500/50' : 'border-transparent'} transition-all min-h-0`}>
         {trackB ? (
           <ParticipantTile trackRef={trackB} className="h-full w-full object-cover" />
         ) : (
-          <div className="flex items-center justify-center h-full bg-gray-900">
-            <span className="text-slate-500 text-lg font-mono">🔵 &nbsp; Waiting Blue...</span>
+          <div className="flex flex-col items-center justify-center h-full bg-gray-900 text-center p-4">
+            <div className="animate-pulse text-blue-500 mb-2">●</div>
+            <span className="text-slate-500 text-sm md:text-lg font-mono">Waiting Blue...</span>
           </div>
         )}
-        <div className="absolute bottom-2 left-2 bg-blue-600 text-white px-3 py-1 rounded-full text-xs font-bold uppercase">Blue</div>
+        {trackB && (
+           <div className="absolute top-2 left-2 bg-black/50 text-white px-2 py-1 text-xs rounded truncate max-w-[80%]">
+             {trackB.participant.identity}
+           </div>
+        )}
+        <div className="absolute bottom-2 left-2 bg-blue-600 text-white px-2 py-0.5 rounded text-[10px] md:text-xs font-bold uppercase">Blue</div>
       </div>
+
     </div>
   );
 }
+
+
 
 function VictoryOverlay({ phase, onVote, onClose, isVisible }: { phase: Phase; onVote: (team: 'A' | 'B') => void; onClose: () => void; isVisible: boolean }) {
   if (!isVisible || (phase !== 'voting' && phase !== 'finished')) return null;
@@ -111,7 +132,6 @@ function VictoryOverlay({ phase, onVote, onClose, isVisible }: { phase: Phase; o
     </div>
   );
 }
-
 export default function DebateRoom() {
   const [role, setRole] = useState<Role>('viewer');
   const [messages, setMessages] = useState<Message[]>([]);
@@ -136,8 +156,6 @@ export default function DebateRoom() {
       try {
         setToken('');
         const API_URL = getApiUrl();
-        // Используем roomId из URL, если он есть, иначе дефолт 'debate-room'
-        // Тут берем pathname, так как нет params в client component напрямую без хуков
         const pathSegments = window.location.pathname.split('/');
         const roomIdFromUrl = pathSegments[pathSegments.length - 1] || 'debate-room';
         
@@ -256,107 +274,111 @@ export default function DebateRoom() {
     );
 
   return (
-    <div className="max-h-[100dvh] overflow-hidden flex flex-col bg-black text-white">
-      <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
-        <div className="flex-1 relative overflow-hidden">
-          <LiveKitRoom
-            key={token} // Пересоздаем комнату при смене токена (роли)
-            video={role === 'debater'}
-            audio={role === 'debater'}
-            token={token}
-            // ХАРДКОД URL ДЛЯ СТАБИЛЬНОСТИ
-            serverUrl="wss://shoom-1bcua3f5.livekit.cloud"
-            data-lk-theme="default"
-            className="h-full"
-            onConnected={() => console.log("✅ LiveKit Connected")}
-            onDisconnected={() => console.log("❌ LiveKit Disconnected")}
-            onError={(err) => console.error("🚨 LiveKit Error:", err)}
-          >
-            <DualSpeakerView activePlayer={serverState.activePlayer} />
-            <RoomAudioRenderer />
-          </LiveKitRoom>
+    <div className="h-[100dvh] w-full flex flex-col md:flex-row bg-black text-white overflow-hidden">
+      
+      {/* ЛЕВАЯ ЧАСТЬ: ВИДЕО (Занимает все свободное место) */}
+      <div className="flex-1 relative flex flex-col min-h-0">
+        <LiveKitRoom
+          key={token}
+          video={role === 'debater'}
+          audio={role === 'debater'}
+          token={token}
+          serverUrl={process.env.NEXT_PUBLIC_LIVEKIT_URL || 'wss://shoom-1bcua3f5.livekit.cloud'}
+          data-lk-theme="default"
+          className="h-full w-full flex flex-col"
+          onConnected={() => console.log("✅ LiveKit Connected")}
+          onDisconnected={() => console.log("❌ LiveKit Disconnected")}
+          onError={(err) => console.error("🚨 LiveKit Error:", err)}
+        >
+          <div className="flex-1 min-h-0 w-full relative">
+             <DualSpeakerView activePlayer={serverState.activePlayer} />
+             <RoomAudioRenderer />
+             
+             <div className="absolute top-2 left-2 bg-black/70 text-white px-3 py-1 rounded-full text-xs md:text-sm font-mono font-bold z-10">
+                {formatTime(serverState.timeLeft)}
+             </div>
+             <div className="absolute top-2 right-2 bg-black/70 text-white px-3 py-1 rounded-full text-xs md:text-sm font-bold uppercase z-10">
+                {serverState.phase}
+             </div>
+             <div className="absolute bottom-2 right-2 bg-black/70 text-white px-3 py-1 rounded-full text-xs md:text-sm font-mono z-10">
+                👁️ {serverState.viewersCount}
+             </div>
 
-          <div className="absolute top-2 left-2 bg-black/70 text-white px-3 py-1 rounded-full text-xs md:text-sm font-mono font-bold">
-            {formatTime(serverState.timeLeft)}
-          </div>
-          <div className="absolute top-2 right-2 bg-black/70 text-white px-3 py-1 rounded-full text-xs md:text-sm font-bold uppercase">
-            {serverState.phase}
-          </div>
-          <div className="absolute bottom-2 right-2 bg-black/70 text-white px-3 py-1 rounded-full text-xs md:text-sm font-mono">
-            👁️ {serverState.viewersCount}
-          </div>
-
-          {floatingEmojis.map((emoji) => (
-            <div key={emoji.id} className="absolute text-4xl pointer-events-none animate-float-up" style={{ left: `${emoji.x}%`, bottom: '10%' }}>
-              {emoji.emoji}
+             <div className="absolute top-2 left-1/2 transform -translate-x-1/2 flex gap-1 z-20">
+              {(['viewer', 'admin', 'debater'] as Role[]).map((r) => (
+                <button
+                  key={r}
+                  onClick={() => setRole(r)}
+                  className={`px-2 py-0.5 text-[8px] md:text-[10px] uppercase font-bold rounded ${role === r ? 'bg-blue-600 text-white' : 'bg-black/50 text-slate-400'}`}
+                >
+                  {r}
+                </button>
+              ))}
             </div>
-          ))}
 
-          {role === 'admin' && (
-            <div className="absolute bottom-2 left-2 flex gap-1 bg-black/80 p-1 rounded-lg">
-              <button onClick={() => sendAdminAction('start')} className="p-2 hover:bg-green-600 rounded-lg text-white">
-                <Play size={14} />
-              </button>
-              <button onClick={() => sendAdminAction('next_round')} className="p-2 hover:bg-blue-600 rounded-lg text-white">
-                <SkipForward size={14} />
-              </button>
-              <button onClick={() => sendAdminAction('reset')} className="p-2 hover:bg-red-600 rounded-lg text-white">
-                <RotateCcw size={14} />
-              </button>
-            </div>
-          )}
-
-          <div className="absolute top-2 left-1/2 transform -translate-x-1/2 flex gap-1">
-            {(['viewer', 'admin', 'debater'] as Role[]).map((r) => (
-              <button
-                key={r}
-                onClick={() => setRole(r)}
-                className={`px-2 py-0.5 text-[8px] md:text-[10px] uppercase font-bold rounded ${role === r ? 'bg-blue-600 text-white' : 'bg-black/50 text-slate-400'}`}
-              >
-                {r}
-              </button>
-            ))}
-          </div>
-
-          <VictoryOverlay phase={serverState.phase} isVisible={showVoteModal} onClose={() => setShowVoteModal(false)} onVote={handleVote} />
-        </div>
-
-        <div className="w-full md:w-80 flex flex-col overflow-hidden bg-slate-900">
-          <div className="p-3 border-b border-slate-800 font-bold text-sm">Live Chat</div>
-
-          <div className="flex-1 overflow-y-auto p-3 space-y-2 min-h-0">
-            {messages.map((msg, idx) => (
-              <div key={idx} className="text-xs bg-slate-800 p-2 rounded animate-fade-in">
-                <span className="font-bold text-blue-400">{msg.user}:</span> &nbsp;
-                <span className="text-white">{msg.text}</span>
+            {role === 'admin' && (
+              <div className="absolute bottom-2 left-2 flex gap-1 bg-black/80 p-1 rounded-lg z-20">
+                <button onClick={() => sendAdminAction('start')} className="p-2 hover:bg-green-600 rounded-lg text-white">
+                  <Play size={14} />
+                </button>
+                <button onClick={() => sendAdminAction('next_round')} className="p-2 hover:bg-blue-600 rounded-lg text-white">
+                  <SkipForward size={14} />
+                </button>
+                <button onClick={() => sendAdminAction('reset')} className="p-2 hover:bg-red-600 rounded-lg text-white">
+                  <RotateCcw size={14} />
+                </button>
+              </div>
+            )}
+            
+            {floatingEmojis.map((emoji) => (
+              <div key={emoji.id} className="absolute text-4xl pointer-events-none animate-float-up z-30" style={{ left: `${emoji.x}%`, bottom: '10%' }}>
+                {emoji.emoji}
               </div>
             ))}
-            <div ref={chatEndRef} />
+            <VictoryOverlay phase={serverState.phase} isVisible={showVoteModal} onClose={() => setShowVoteModal(false)} onVote={handleVote} />
           </div>
+        </LiveKitRoom>
+      </div>
 
-          {role === 'viewer' && (
-            <div className="p-2 flex gap-2 border-t border-slate-800">
-              <button onClick={() => sendReaction('heart')} className="text-xl p-2 bg-slate-800 rounded-full active:scale-90 transition-transform">
-                ❤️
-              </button>
-              <button onClick={() => sendReaction('poop')} className="text-xl p-2 bg-slate-800 rounded-full active:scale-90 transition-transform">
-                💩
-              </button>
-            </div>
-          )}
-
-          <form onSubmit={sendMessage} className="p-3 flex gap-2 border-t border-slate-800">
-            <input
-              className="flex-1 bg-slate-800 border border-slate-700 rounded-full px-4 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
-              placeholder="Chat..."
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-            />
-            <button type="button" onClick={sendDonation} className="text-2xl hover:scale-110 transition-transform">
-              💰
-            </button>
-          </form>
+      {/* ПРАВАЯ ЧАСТЬ (или НИЖНЯЯ на мобилках): ЧАТ */}
+      <div className="h-[35vh] md:h-full w-full md:w-80 flex flex-col bg-slate-900 border-t md:border-t-0 md:border-l border-slate-800 shadow-xl z-40">
+        <div className="p-2 md:p-3 border-b border-slate-800 font-bold text-xs md:text-sm flex justify-between items-center bg-slate-900/90 backdrop-blur">
+          <span>Live Chat</span>
+          <span className="text-[10px] text-slate-500">v1.0</span>
         </div>
+
+        <div className="flex-1 overflow-y-auto p-2 md:p-3 space-y-2 min-h-0 scrollbar-thin scrollbar-thumb-slate-700">
+          {messages.map((msg, idx) => (
+            <div key={idx} className="text-xs bg-slate-800/50 p-1.5 md:p-2 rounded animate-fade-in break-words">
+              <span className="font-bold text-blue-400">{msg.user}:</span> &nbsp;
+              <span className="text-slate-200">{msg.text}</span>
+            </div>
+          ))}
+          <div ref={chatEndRef} />
+        </div>
+
+        {role === 'viewer' && (
+          <div className="p-2 flex justify-center gap-4 border-t border-slate-800 bg-slate-900">
+            <button onClick={() => sendReaction('heart')} className="text-xl hover:scale-125 transition-transform">
+              ❤️
+            </button>
+            <button onClick={() => sendReaction('poop')} className="text-xl hover:scale-125 transition-transform">
+              💩
+            </button>
+          </div>
+        )}
+
+        <form onSubmit={sendMessage} className="p-2 md:p-3 flex gap-2 border-t border-slate-800 bg-slate-900">
+          <input
+            className="flex-1 bg-slate-800 border border-slate-700 rounded-full px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm text-white focus:outline-none focus:border-blue-500 placeholder-slate-500"
+            placeholder="Send a message..."
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+          />
+          <button type="button" onClick={sendDonation} className="text-xl hover:scale-110 transition-transform">
+            💰
+          </button>
+        </form>
       </div>
 
       <style jsx global>{`
@@ -374,7 +396,18 @@ export default function DebateRoom() {
         .animate-fade-in {
           animation: fade-in 0.2s ease-out forwards;
         }
+        .scrollbar-thin::-webkit-scrollbar {
+          width: 6px;
+        }
+        .scrollbar-thin::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .scrollbar-thin::-webkit-scrollbar-thumb {
+          background-color: #334155;
+          border-radius: 20px;
+        }
       `}</style>
     </div>
   );
 }
+
