@@ -1,12 +1,52 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Flame, Users, Zap, Plus, ArrowRight, Github, Twitter } from 'lucide-react';
+import { Flame, Users, Zap, Plus, ArrowRight } from 'lucide-react';
+
+// Функция определения API URL (та же, что в page.tsx комнаты)
+function getApiUrl() {
+  if (typeof window === 'undefined') return 'http://localhost:3001';
+  return window.location.hostname === 'localhost'
+    ? 'http://localhost:3001'
+    : 'https://shoom.fun';
+}
+
+interface RoomData {
+  id: string;
+  title: string;
+  viewers: number;
+  phase: string;
+}
 
 export default function Lobby() {
   const router = useRouter();
   const [topic, setTopic] = useState('');
+  const [activeDebates, setActiveDebates] = useState<RoomData[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Загрузка активных комнат с бэкенда
+  useEffect(() => {
+    const fetchRooms = async () => {
+      try {
+        const API_URL = getApiUrl();
+        const res = await fetch(`${API_URL}/api/rooms`);
+        const data = await res.json();
+        setActiveDebates(data);
+      } catch (error) {
+        console.error('Failed to fetch rooms:', error);
+        // Fallback: показываем пустой список или mock
+        setActiveDebates([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchRooms();
+    // Обновляем список каждые 5 секунд
+    const interval = setInterval(fetchRooms, 5000);
+    return () => clearInterval(interval);
+  }, []);
 
   const createRoom = () => {
     if (!topic.trim()) return;
@@ -25,19 +65,14 @@ export default function Lobby() {
     if (e.key === 'Enter') createRoom();
   };
 
-  // Mock Data (в будущем заменим на fetch('/api/rooms'))
-  const activeDebates = [
-    { id: 'ai-art', title: 'AI Art: Theft or Progress?', viewers: 1205, status: 'RAGE' },
-    { id: 'vim-vscode', title: 'Vim vs VS Code', viewers: 892, status: 'ROUND 2' },
-    { id: 'crypto', title: 'Crypto is a Scam', viewers: 450, status: 'VOTING' },
-    { id: 'pineapple', title: 'Pineapple on Pizza', viewers: 120, status: 'WAITING' },
-  ];
-
   return (
     <div className="min-h-screen bg-[#020617] text-white font-sans selection:bg-red-500/30 overflow-x-hidden">
       {/* Navbar */}
       <div className="fixed top-0 w-full p-4 md:p-6 flex justify-between items-center bg-black/50 backdrop-blur-xl z-50 border-b border-white/5">
-        <div className="w-8 h-8 md:w-10 md:h-10 bg-red-600 rounded-xl flex items-center justify-center transform group-hover:rotate-12 transition-transform shadow-[0_0_20px_rgba(220,38,38,0.5)]" onClick={() => window.location.reload()}>
+        <div 
+          className="w-8 h-8 md:w-10 md:h-10 bg-red-600 rounded-xl flex items-center justify-center transform hover:rotate-12 transition-transform shadow-[0_0_20px_rgba(220,38,38,0.5)] cursor-pointer" 
+          onClick={() => router.push('/')}
+        >
           <Flame className="text-white fill-white" size={20} />
         </div>
         <span className="text-xl md:text-2xl font-black tracking-tighter">SHOOM</span>
@@ -63,7 +98,7 @@ export default function Lobby() {
         </p>
 
         {/* Create Input */}
-        <div className="w-full max-w-3xl bg-slate-900/50 border border-white/10 rounded-full p-2 flex items-center gap-2 group cursor-pointer" onClick={() => window.location.reload()}>
+        <div className="w-full max-w-3xl bg-slate-900/50 border border-white/10 rounded-full p-2 flex items-center gap-2">
           <input
             value={topic}
             onChange={(e) => setTopic(e.target.value)}
@@ -88,41 +123,49 @@ export default function Lobby() {
             <h2 className="text-2xl md:text-3xl font-black">Live Now</h2>
             <span className="text-xs uppercase tracking-wider text-slate-500 flex items-center gap-2">
               <Zap className="text-red-500 fill-red-500" size={16} />
-              4 BATTLES ONLINE
+              {loading ? '...' : `${activeDebates.length} BATTLES ONLINE`}
             </span>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {activeDebates.map((room) => (
-              <div
-                key={room.id}
-                onClick={() => router.push(`/room/${room.id}`)}
-                className="group relative bg-slate-900/40 border border-white/5 hover:border-red-500/50 rounded-3xl p-6 cursor-pointer hover:bg-slate-900/80 transition-all hover:-translate-y-1 overflow-hidden"
-              >
-                {/* Glow Effect */}
-                <div className="absolute inset-0 bg-gradient-to-br from-red-600/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"></div>
+          {loading ? (
+            <div className="text-center text-slate-500 py-12">Loading battles...</div>
+          ) : activeDebates.length === 0 ? (
+            <div className="text-center text-slate-500 py-12">
+              No active battles. Be the first to create one! 🔥
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {activeDebates.map((room) => (
+                <div
+                  key={room.id}
+                  onClick={() => router.push(`/room/${room.id}`)}
+                  className="group relative bg-slate-900/40 border border-white/5 hover:border-red-500/50 rounded-3xl p-6 cursor-pointer hover:bg-slate-900/80 transition-all hover:-translate-y-1 overflow-hidden"
+                >
+                  {/* Glow Effect */}
+                  <div className="absolute inset-0 bg-gradient-to-br from-red-600/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"></div>
 
-                <div className="flex justify-between items-start mb-4">
-                  <span className="px-3 py-1 bg-red-600/20 text-red-400 text-xs font-bold rounded-full uppercase tracking-wide">
-                    {room.status}
-                  </span>
-                  <span className="flex items-center gap-1 text-slate-400 text-sm">
-                    <Users size={14} />
-                    {room.viewers}
-                  </span>
+                  <div className="flex justify-between items-start mb-4">
+                    <span className="px-3 py-1 bg-red-600/20 text-red-400 text-xs font-bold rounded-full uppercase tracking-wide">
+                      {room.phase}
+                    </span>
+                    <span className="flex items-center gap-1 text-slate-400 text-sm">
+                      <Users size={14} />
+                      {room.viewers}
+                    </span>
+                  </div>
+
+                  <h3 className="text-xl font-bold mb-4 group-hover:text-red-400 transition-colors">
+                    {room.title}
+                  </h3>
+
+                  <div className="flex items-center gap-2 text-slate-500 text-sm font-bold group-hover:text-white transition-colors">
+                    WATCH LIVE
+                    <ArrowRight size={16} />
+                  </div>
                 </div>
-
-                <h3 className="text-xl font-bold mb-4 group-hover:text-red-400 transition-colors">
-                  {room.title}
-                </h3>
-
-                <div className="flex items-center gap-2 text-slate-500 text-sm font-bold group-hover:text-white transition-colors">
-                  WATCH LIVE
-                  <ArrowRight size={16} />
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
