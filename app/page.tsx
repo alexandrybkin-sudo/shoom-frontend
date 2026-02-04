@@ -62,13 +62,13 @@ export default function HomePage() {
         Live 1x1 rage debates. Pick a room and drop into chaos.
       </p>
 
-      {/* CREATE BUTTON */}
+      {/* CREATE BUTTON - С ИЗМЕНЕННЫМ ТЕКСТОМ ДЛЯ ПРОВЕРКИ */}
       <button
         onClick={createRoom}
         disabled={loading}
         className="mb-16 px-10 py-4 rounded-full bg-white text-black font-black text-xl uppercase tracking-widest hover:scale-105 active:scale-95 transition-transform disabled:opacity-60 shadow-[0_0_30px_rgba(255,255,255,0.2)]"
       >
-        {loading ? 'INITIALIZING...' : 'CREATE DEBATE'}
+        {loading ? 'INITIALIZING...' : 'CREATE DEBATE NOW!!!'}
       </button>
 
       {/* ROOMS LIST */}
