@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
-import { Play, SkipForward, RotateCcw, PlayCircle, X } from 'lucide-react';
+import { Play, SkipForward, RotateCcw } from 'lucide-react';
 import {
   LiveKitRoom,
   ParticipantTile,
@@ -39,9 +39,9 @@ interface ServerState {
 }
 
 function getApiUrl() {
-  if (typeof window === 'undefined') return 'http://localhost:4000';
+  if (typeof window === 'undefined') return 'http://localhost:3001';
   return window.location.hostname === 'localhost'
-    ? 'http://localhost:4000'
+    ? 'http://localhost:3001'
     : 'https://shoom.fun';
 }
 
@@ -52,11 +52,11 @@ function DualSpeakerView({ activePlayer }: { activePlayer: 'A' | 'B' | null }) {
   const trackB = tracks[1];
 
   return (
-    <div className="flex flex-col md:flex-row h-full w-full bg-black p-1 gap-1">
+    <div className="flex flex-col md:flex-row h-full w-full bg-black p-1 gap-1 min-h-[50vh]">
       {/* ИГРОК A (RED) */}
       <div className={`flex-1 relative rounded-lg overflow-hidden border-4 ${activePlayer === 'A' ? 'border-red-500 ring-4 ring-red-500/50' : 'border-transparent opacity-60'} transition-all`}>
         {trackA ? (
-          <ParticipantTile trackRef={trackA} className="h-full" />
+          <ParticipantTile trackRef={trackA} className="h-full w-full object-cover" />
         ) : (
           <div className="flex items-center justify-center h-full bg-gray-900">
             <span className="text-slate-500 text-lg font-mono">🔴 &nbsp; Waiting Red...</span>
@@ -68,7 +68,7 @@ function DualSpeakerView({ activePlayer }: { activePlayer: 'A' | 'B' | null }) {
       {/* ИГРОК B (BLUE) */}
       <div className={`flex-1 relative rounded-lg overflow-hidden border-4 ${activePlayer === 'B' ? 'border-blue-500 ring-4 ring-blue-500/50' : 'border-transparent opacity-60'} transition-all`}>
         {trackB ? (
-          <ParticipantTile trackRef={trackB} className="h-full" />
+          <ParticipantTile trackRef={trackB} className="h-full w-full object-cover" />
         ) : (
           <div className="flex items-center justify-center h-full bg-gray-900">
             <span className="text-slate-500 text-lg font-mono">🔵 &nbsp; Waiting Blue...</span>
@@ -79,9 +79,6 @@ function DualSpeakerView({ activePlayer }: { activePlayer: 'A' | 'B' | null }) {
     </div>
   );
 }
-
-
-
 
 function VictoryOverlay({ phase, onVote, onClose, isVisible }: { phase: Phase; onVote: (team: 'A' | 'B') => void; onClose: () => void; isVisible: boolean }) {
   if (!isVisible || (phase !== 'voting' && phase !== 'finished')) return null;
@@ -139,13 +136,18 @@ export default function DebateRoom() {
       try {
         setToken('');
         const API_URL = getApiUrl();
+        // Используем roomId из URL, если он есть, иначе дефолт 'debate-room'
+        // Тут берем pathname, так как нет params в client component напрямую без хуков
+        const pathSegments = window.location.pathname.split('/');
+        const roomIdFromUrl = pathSegments[pathSegments.length - 1] || 'debate-room';
+        
         const participantName = `${role}-${Math.random().toString(36).substring(7)}`;
         const lkRole = role === 'debater' ? 'debater' : 'viewer';
-        const res = await fetch(`${API_URL}/api/token?roomName=debate-room&participantName=${participantName}&role=${lkRole}`);
+        const res = await fetch(`${API_URL}/api/token?roomName=${roomIdFromUrl}&participantName=${participantName}&role=${lkRole}`);
         const data = await res.json();
         setToken(data.token);
       } catch (error) {
-        console.error(error);
+        console.error("Token fetch error:", error);
       }
     };
     fetchToken();
@@ -163,10 +165,13 @@ export default function DebateRoom() {
     if (socketRef.current) return;
 
     const API_URL = getApiUrl();
+    const pathSegments = window.location.pathname.split('/');
+    const roomIdFromUrl = pathSegments[pathSegments.length - 1] || 'debate-room';
+
     console.log('Connecting to socket:', API_URL);
     const socket = io(API_URL, {
       transports: ['websocket', 'polling'],
-      query: { roomId: 'debate-room' },
+      query: { roomId: roomIdFromUrl },
       withCredentials: true,
       reconnection: true,
     });
@@ -255,12 +260,17 @@ export default function DebateRoom() {
       <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
         <div className="flex-1 relative overflow-hidden">
           <LiveKitRoom
+            key={token} // Пересоздаем комнату при смене токена (роли)
             video={role === 'debater'}
             audio={role === 'debater'}
             token={token}
-            serverUrl={process.env.NEXT_PUBLIC_LIVEKIT_URL || 'wss://shoom-x62b0zzp.livekit.cloud'}
+            // ХАРДКОД URL ДЛЯ СТАБИЛЬНОСТИ
+            serverUrl="wss://shoom-1bcua3f5.livekit.cloud"
             data-lk-theme="default"
             className="h-full"
+            onConnected={() => console.log("✅ LiveKit Connected")}
+            onDisconnected={() => console.log("❌ LiveKit Disconnected")}
+            onError={(err) => console.error("🚨 LiveKit Error:", err)}
           >
             <DualSpeakerView activePlayer={serverState.activePlayer} />
             <RoomAudioRenderer />
@@ -309,63 +319,62 @@ export default function DebateRoom() {
           </div>
 
           <VictoryOverlay phase={serverState.phase} isVisible={showVoteModal} onClose={() => setShowVoteModal(false)} onVote={handleVote} />
+        </div>
+
+        <div className="w-full md:w-80 flex flex-col overflow-hidden bg-slate-900">
+          <div className="p-3 border-b border-slate-800 font-bold text-sm">Live Chat</div>
+
+          <div className="flex-1 overflow-y-auto p-3 space-y-2 min-h-0">
+            {messages.map((msg, idx) => (
+              <div key={idx} className="text-xs bg-slate-800 p-2 rounded animate-fade-in">
+                <span className="font-bold text-blue-400">{msg.user}:</span> &nbsp;
+                <span className="text-white">{msg.text}</span>
+              </div>
+            ))}
+            <div ref={chatEndRef} />
           </div>
 
-<div className="w-full md:w-80 flex flex-col overflow-hidden bg-slate-900">
-  <div className="p-3 border-b border-slate-800 font-bold text-sm">Live Chat</div>
+          {role === 'viewer' && (
+            <div className="p-2 flex gap-2 border-t border-slate-800">
+              <button onClick={() => sendReaction('heart')} className="text-xl p-2 bg-slate-800 rounded-full active:scale-90 transition-transform">
+                ❤️
+              </button>
+              <button onClick={() => sendReaction('poop')} className="text-xl p-2 bg-slate-800 rounded-full active:scale-90 transition-transform">
+                💩
+              </button>
+            </div>
+          )}
 
-  <div className="flex-1 overflow-y-auto p-3 space-y-2 min-h-0">
-    {messages.map((msg, idx) => (
-      <div key={idx} className="text-xs bg-slate-800 p-2 rounded animate-fade-in">
-        <span className="font-bold text-blue-400">{msg.user}:</span> &nbsp;
-        <span className="text-white">{msg.text}</span>
+          <form onSubmit={sendMessage} className="p-3 flex gap-2 border-t border-slate-800">
+            <input
+              className="flex-1 bg-slate-800 border border-slate-700 rounded-full px-4 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+              placeholder="Chat..."
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+            />
+            <button type="button" onClick={sendDonation} className="text-2xl hover:scale-110 transition-transform">
+              💰
+            </button>
+          </form>
+        </div>
       </div>
-    ))}
-    <div ref={chatEndRef} />
-  </div>
 
-  {role === 'viewer' && (
-    <div className="p-2 flex gap-2 border-t border-slate-800">
-      <button onClick={() => sendReaction('heart')} className="text-xl p-2 bg-slate-800 rounded-full active:scale-90 transition-transform">
-        ❤️
-      </button>
-      <button onClick={() => sendReaction('poop')} className="text-xl p-2 bg-slate-800 rounded-full active:scale-90 transition-transform">
-        💩
-      </button>
+      <style jsx global>{`
+        @keyframes float-up {
+          0% { transform: translateY(0); opacity: 1; }
+          100% { transform: translateY(-100px); opacity: 0; }
+        }
+        @keyframes fade-in {
+          from { opacity: 0; transform: translateY(5px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-float-up {
+          animation: float-up 1.5s ease-out forwards;
+        }
+        .animate-fade-in {
+          animation: fade-in 0.2s ease-out forwards;
+        }
+      `}</style>
     </div>
-  )}
-
-  <form onSubmit={sendMessage} className="p-3 flex gap-2 border-t border-slate-800">
-    <input
-      className="flex-1 bg-slate-800 border border-slate-700 rounded-full px-4 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
-      placeholder="Chat..."
-      value={input}
-      onChange={(e) => setInput(e.target.value)}
-    />
-    <button type="button" onClick={sendDonation} className="text-2xl hover:scale-110 transition-transform">
-      💰
-    </button>
-  </form>
-</div>
-</div>
-
-<style jsx global>{`
-@keyframes float-up {
-  0% { transform: translateY(0); opacity: 1; }
-  100% { transform: translateY(-100px); opacity: 0; }
+  );
 }
-@keyframes fade-in {
-  from { opacity: 0; transform: translateY(5px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-.animate-float-up {
-  animation: float-up 1.5s ease-out forwards;
-}
-.animate-fade-in {
-  animation: fade-in 0.2s ease-out forwards;
-}
-`}</style>
-</div>
-);
-}
-
