@@ -38,10 +38,20 @@ export default function HomePage() {
     return () => clearInterval(id);
   }, []);
 
-  // временно создаём одну фиксированную комнату (debate-room),
-  // если хочешь – потом сделаем отдельный /api/rooms POST
   const createRoom = async () => {
-    router.push('/room/debate-room');
+    setLoading(true);
+    try {
+      const res = await fetch(`${getApiUrl()}/api/rooms`, { method: 'POST' });
+      if (!res.ok) throw new Error('Failed');
+      
+      const data = await res.json();
+      router.push(`/room/${data.id}`); 
+    } catch (e) {
+      console.error(e);
+      alert('Error creating room');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -58,7 +68,7 @@ export default function HomePage() {
         disabled={loading}
         className="mb-10 px-8 py-3 rounded-full bg-white text-black font-bold uppercase tracking-widest hover:scale-105 active:scale-95 transition-transform disabled:opacity-60"
       >
-        {loading ? 'Loading…' : 'Create Debate'}
+        {loading ? 'Creating…' : 'Create Debate'}
       </button>
 
       <div className="w-full max-w-2xl">
