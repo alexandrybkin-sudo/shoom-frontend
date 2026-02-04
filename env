@@ -1,0 +1,7 @@
+# shoom/.env (ФРОНТЕНД - Безопасно)
+
+# Адрес LiveKit сервера (чтобы браузер знал, куда отправлять видео)
+NEXT_PUBLIC_LIVEKIT_URL=wss://shoom-1bcua3f5.livekit.cloud
+
+# Адрес твоего бэкенда (для сокетов)
+NEXT_PUBLIC_SOCKET_URL=https://shoom.fun
