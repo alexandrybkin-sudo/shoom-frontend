@@ -1,0 +1,12 @@
+{
+	"folders": [
+		{
+			"name": "shoom",
+			"path": "."
+		},
+		{
+			"name": "shoom-backend",
+			"path": "../shoom-backend"
+		}
+	]
+}
