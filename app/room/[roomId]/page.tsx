@@ -8,9 +8,11 @@ import {
   ParticipantTile,
   useTracks,
   RoomAudioRenderer,
+  useLocalParticipant,
+  useConnectionState,
 } from '@livekit/components-react';
 import '@livekit/components-styles';
-import { Track } from 'livekit-client';
+import { Track, ConnectionState } from 'livekit-client';
 
 type Phase = 'waiting' | 'intro' | 'roundA' | 'roundB' | 'ad' | 'voting' | 'rage' | 'finished';
 type Role = 'viewer' | 'admin' | 'debater';
@@ -45,63 +47,130 @@ function getApiUrl() {
     : 'https://shoom.fun';
 }
 
-// --- Custom Smart View ---
-// --- Custom Smart View ---
 function DualSpeakerView({ activePlayer }: { activePlayer: 'A' | 'B' | null }) {
   const tracks = useTracks([Track.Source.Camera]);
-  // Логируем треки для отладки
-  console.log("🎥 Tracks:", tracks);
 
-  const trackA = tracks[0];
-  const trackB = tracks[1];
+  const cameraTracks = tracks
+    .filter((t: any) => !!t?.publication?.track && !!t?.participant?.identity)
+    .sort((a: any, b: any) =>
+      a.participant.identity.localeCompare(b.participant.identity)
+    );
+
+  console.log(
+    '🎥 cameraTracks:',
+    cameraTracks.map((t: any) => ({
+      identity: t.participant.identity,
+      isSubscribed: t.publication?.isSubscribed,
+      source: t.source,
+    }))
+  );
+
+  const trackA = cameraTracks[0];
+  const trackB = cameraTracks[1];
 
   return (
-    // FIX: Убрали min-h-[50vh], добавили h-full w-full и flex-grow
     <div className="flex flex-col md:flex-row w-full h-full bg-black gap-1 p-1">
-      
-      {/* ИГРОК A (RED) */}
-      <div className={`flex-1 relative rounded-lg overflow-hidden border-4 ${activePlayer === 'A' ? 'border-red-500 ring-4 ring-red-500/50' : 'border-transparent'} transition-all min-h-0`}>
+      <div
+        className={`flex-1 relative rounded-lg overflow-hidden border-4 ${
+          activePlayer === 'A'
+            ? 'border-red-500 ring-4 ring-red-500/50'
+            : 'border-transparent'
+        } transition-all min-h-0`}
+      >
         {trackA ? (
-          <ParticipantTile trackRef={trackA} className="h-full w-full object-cover" />
+          <ParticipantTile trackRef={trackA} className="h-full w-full" />
         ) : (
           <div className="flex flex-col items-center justify-center h-full bg-gray-900 text-center p-4">
             <div className="animate-pulse text-red-500 mb-2">●</div>
-            <span className="text-slate-500 text-sm md:text-lg font-mono">Waiting Red...</span>
+            <span className="text-slate-500 text-sm md:text-lg font-mono">
+              Waiting Red...
+            </span>
           </div>
         )}
+
         {trackA && (
-           <div className="absolute top-2 left-2 bg-black/50 text-white px-2 py-1 text-xs rounded truncate max-w-[80%]">
-             {trackA.participant.identity}
-           </div>
+          <div className="absolute top-2 left-2 bg-black/50 text-white px-2 py-1 text-xs rounded truncate max-w-[80%]">
+            {trackA.participant.identity}
+          </div>
         )}
-        <div className="absolute bottom-2 left-2 bg-red-600 text-white px-2 py-0.5 rounded text-[10px] md:text-xs font-bold uppercase">Red</div>
+
+        <div className="absolute bottom-2 left-2 bg-red-600 text-white px-2 py-0.5 rounded text-[10px] md:text-xs font-bold uppercase">
+          Red
+        </div>
       </div>
 
-      {/* ИГРОК B (BLUE) */}
-      <div className={`flex-1 relative rounded-lg overflow-hidden border-4 ${activePlayer === 'B' ? 'border-blue-500 ring-4 ring-blue-500/50' : 'border-transparent'} transition-all min-h-0`}>
+      <div
+        className={`flex-1 relative rounded-lg overflow-hidden border-4 ${
+          activePlayer === 'B'
+            ? 'border-blue-500 ring-4 ring-blue-500/50'
+            : 'border-transparent'
+        } transition-all min-h-0`}
+      >
         {trackB ? (
-          <ParticipantTile trackRef={trackB} className="h-full w-full object-cover" />
+          <ParticipantTile trackRef={trackB} className="h-full w-full" />
         ) : (
           <div className="flex flex-col items-center justify-center h-full bg-gray-900 text-center p-4">
             <div className="animate-pulse text-blue-500 mb-2">●</div>
-            <span className="text-slate-500 text-sm md:text-lg font-mono">Waiting Blue...</span>
+            <span className="text-slate-500 text-sm md:text-lg font-mono">
+              Waiting Blue...
+            </span>
           </div>
         )}
-        {trackB && (
-           <div className="absolute top-2 left-2 bg-black/50 text-white px-2 py-1 text-xs rounded truncate max-w-[80%]">
-             {trackB.participant.identity}
-           </div>
-        )}
-        <div className="absolute bottom-2 left-2 bg-blue-600 text-white px-2 py-0.5 rounded text-[10px] md:text-xs font-bold uppercase">Blue</div>
-      </div>
 
+        {trackB && (
+          <div className="absolute top-2 left-2 bg-black/50 text-white px-2 py-1 text-xs rounded truncate max-w-[80%]">
+            {trackB.participant.identity}
+          </div>
+        )}
+
+        <div className="absolute bottom-2 left-2 bg-blue-600 text-white px-2 py-0.5 rounded text-[10px] md:text-xs font-bold uppercase">
+          Blue
+        </div>
+      </div>
     </div>
   );
 }
 
+function AutoPublishMedia({ enabled }: { enabled: boolean }) {
+  const { localParticipant } = useLocalParticipant();
+  const connectionState = useConnectionState();
 
+  useEffect(() => {
+    const run = async () => {
+      try {
+        if (connectionState !== ConnectionState.Connected) return;
 
-function VictoryOverlay({ phase, onVote, onClose, isVisible }: { phase: Phase; onVote: (team: 'A' | 'B') => void; onClose: () => void; isVisible: boolean }) {
+        if (!enabled) {
+          await localParticipant.setCameraEnabled(false);
+          await localParticipant.setMicrophoneEnabled(false);
+          return;
+        }
+
+        await localParticipant.setMicrophoneEnabled(true);
+        await localParticipant.setCameraEnabled(true);
+        console.log('🎤📷 Local media enabled after stable connection');
+      } catch (err) {
+        console.error('AutoPublishMedia error:', err);
+      }
+    };
+
+    run();
+  }, [enabled, connectionState, localParticipant]);
+
+  return null;
+}
+
+function VictoryOverlay({
+  phase,
+  onVote,
+  onClose,
+  isVisible,
+}: {
+  phase: Phase;
+  onVote: (team: 'A' | 'B') => void;
+  onClose: () => void;
+  isVisible: boolean;
+}) {
   if (!isVisible || (phase !== 'voting' && phase !== 'finished')) return null;
 
   return (
@@ -113,14 +182,20 @@ function VictoryOverlay({ phase, onVote, onClose, isVisible }: { phase: Phase; o
         <div className="flex flex-col md:flex-row items-center gap-4 md:gap-8">
           <div className="flex flex-col items-center gap-2">
             <div className="text-6xl md:text-8xl">🔴</div>
-            <button onClick={() => onVote('A')} className="px-6 py-2 md:px-10 md:py-4 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white font-black text-sm md:text-2xl uppercase tracking-widest rounded-xl transition-all hover:scale-105 active:scale-95 shadow-xl shadow-red-900/50">
+            <button
+              onClick={() => onVote('A')}
+              className="px-6 py-2 md:px-10 md:py-4 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white font-black text-sm md:text-2xl uppercase tracking-widest rounded-xl transition-all hover:scale-105 active:scale-95 shadow-xl shadow-red-900/50"
+            >
               Vote Red
             </button>
           </div>
           <div className="text-2xl md:text-5xl font-black text-slate-600 uppercase">VS</div>
           <div className="flex flex-col items-center gap-2">
             <div className="text-6xl md:text-8xl">🔵</div>
-            <button onClick={() => onVote('B')} className="px-6 py-2 md:px-10 md:py-4 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-black text-sm md:text-2xl uppercase tracking-widest rounded-xl transition-all hover:scale-105 active:scale-95 shadow-xl shadow-blue-900/50">
+            <button
+              onClick={() => onVote('B')}
+              className="px-6 py-2 md:px-10 md:py-4 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-black text-sm md:text-2xl uppercase tracking-widest rounded-xl transition-all hover:scale-105 active:scale-95 shadow-xl shadow-blue-900/50"
+            >
               Vote Blue
             </button>
           </div>
@@ -132,6 +207,7 @@ function VictoryOverlay({ phase, onVote, onClose, isVisible }: { phase: Phase; o
     </div>
   );
 }
+
 export default function DebateRoom() {
   const [role, setRole] = useState<Role>('viewer');
   const [messages, setMessages] = useState<Message[]>([]);
@@ -158,14 +234,16 @@ export default function DebateRoom() {
         const API_URL = getApiUrl();
         const pathSegments = window.location.pathname.split('/');
         const roomIdFromUrl = pathSegments[pathSegments.length - 1] || 'debate-room';
-        
+
         const participantName = `${role}-${Math.random().toString(36).substring(7)}`;
         const lkRole = role === 'debater' ? 'debater' : 'viewer';
-        const res = await fetch(`${API_URL}/api/token?roomName=${roomIdFromUrl}&participantName=${participantName}&role=${lkRole}`);
+        const res = await fetch(
+          `${API_URL}/api/token?roomName=${encodeURIComponent(roomIdFromUrl)}&participantName=${encodeURIComponent(participantName)}&role=${encodeURIComponent(lkRole)}`
+        );
         const data = await res.json();
         setToken(data.token);
       } catch (error) {
-        console.error("Token fetch error:", error);
+        console.error('Token fetch error:', error);
       }
     };
     fetchToken();
@@ -275,41 +353,43 @@ export default function DebateRoom() {
 
   return (
     <div className="h-[100dvh] w-full flex flex-col md:flex-row bg-black text-white overflow-hidden">
-      
-      {/* ЛЕВАЯ ЧАСТЬ: ВИДЕО (Занимает все свободное место) */}
       <div className="flex-1 relative flex flex-col min-h-0">
         <LiveKitRoom
           key={token}
-          video={role === 'debater'}
-          audio={role === 'debater'}
+          video={false}
+          audio={false}
           token={token}
           serverUrl={process.env.NEXT_PUBLIC_LIVEKIT_URL || 'wss://shoom-1bcua3f5.livekit.cloud'}
           data-lk-theme="default"
           className="h-full w-full flex flex-col"
-          onConnected={() => console.log("✅ LiveKit Connected")}
-          onDisconnected={() => console.log("❌ LiveKit Disconnected")}
-          onError={(err) => console.error("🚨 LiveKit Error:", err)}
+          onConnected={() => console.log('✅ LiveKit Connected')}
+          onDisconnected={() => console.log('❌ LiveKit Disconnected')}
+          onError={(err) => console.error('🚨 LiveKit Error:', err)}
         >
-          <div className="flex-1 min-h-0 w-full relative">
-             <DualSpeakerView activePlayer={serverState.activePlayer} />
-             <RoomAudioRenderer />
-             
-             <div className="absolute top-2 left-2 bg-black/70 text-white px-3 py-1 rounded-full text-xs md:text-sm font-mono font-bold z-10">
-                {formatTime(serverState.timeLeft)}
-             </div>
-             <div className="absolute top-2 right-2 bg-black/70 text-white px-3 py-1 rounded-full text-xs md:text-sm font-bold uppercase z-10">
-                {serverState.phase}
-             </div>
-             <div className="absolute bottom-2 right-2 bg-black/70 text-white px-3 py-1 rounded-full text-xs md:text-sm font-mono z-10">
-                👁️ {serverState.viewersCount}
-             </div>
+          <AutoPublishMedia enabled={role === 'debater'} />
 
-             <div className="absolute top-2 left-1/2 transform -translate-x-1/2 flex gap-1 z-20">
+          <div className="flex-1 min-h-0 w-full relative">
+            <DualSpeakerView activePlayer={serverState.activePlayer} />
+            <RoomAudioRenderer />
+
+            <div className="absolute top-2 left-2 bg-black/70 text-white px-3 py-1 rounded-full text-xs md:text-sm font-mono font-bold z-10">
+              {formatTime(serverState.timeLeft)}
+            </div>
+            <div className="absolute top-2 right-2 bg-black/70 text-white px-3 py-1 rounded-full text-xs md:text-sm font-bold uppercase z-10">
+              {serverState.phase}
+            </div>
+            <div className="absolute bottom-2 right-2 bg-black/70 text-white px-3 py-1 rounded-full text-xs md:text-sm font-mono z-10">
+              👁️ {serverState.viewersCount}
+            </div>
+
+            <div className="absolute top-2 left-1/2 transform -translate-x-1/2 flex gap-1 z-20">
               {(['viewer', 'admin', 'debater'] as Role[]).map((r) => (
                 <button
                   key={r}
                   onClick={() => setRole(r)}
-                  className={`px-2 py-0.5 text-[8px] md:text-[10px] uppercase font-bold rounded ${role === r ? 'bg-blue-600 text-white' : 'bg-black/50 text-slate-400'}`}
+                  className={`px-2 py-0.5 text-[8px] md:text-[10px] uppercase font-bold rounded ${
+                    role === r ? 'bg-blue-600 text-white' : 'bg-black/50 text-slate-400'
+                  }`}
                 >
                   {r}
                 </button>
@@ -329,18 +409,27 @@ export default function DebateRoom() {
                 </button>
               </div>
             )}
-            
+
             {floatingEmojis.map((emoji) => (
-              <div key={emoji.id} className="absolute text-4xl pointer-events-none animate-float-up z-30" style={{ left: `${emoji.x}%`, bottom: '10%' }}>
+              <div
+                key={emoji.id}
+                className="absolute text-4xl pointer-events-none animate-float-up z-30"
+                style={{ left: `${emoji.x}%`, bottom: '10%' }}
+              >
                 {emoji.emoji}
               </div>
             ))}
-            <VictoryOverlay phase={serverState.phase} isVisible={showVoteModal} onClose={() => setShowVoteModal(false)} onVote={handleVote} />
+
+            <VictoryOverlay
+              phase={serverState.phase}
+              isVisible={showVoteModal}
+              onClose={() => setShowVoteModal(false)}
+              onVote={handleVote}
+            />
           </div>
         </LiveKitRoom>
       </div>
 
-      {/* ПРАВАЯ ЧАСТЬ (или НИЖНЯЯ на мобилках): ЧАТ */}
       <div className="h-[35vh] md:h-full w-full md:w-80 flex flex-col bg-slate-900 border-t md:border-t-0 md:border-l border-slate-800 shadow-xl z-40">
         <div className="p-2 md:p-3 border-b border-slate-800 font-bold text-xs md:text-sm flex justify-between items-center bg-slate-900/90 backdrop-blur">
           <span>Live Chat</span>
@@ -410,4 +499,3 @@ export default function DebateRoom() {
     </div>
   );
 }
-
