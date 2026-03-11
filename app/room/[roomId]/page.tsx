@@ -47,6 +47,16 @@ function getApiUrl() {
     : 'https://shoom.fun';
 }
 
+function getOrCreateSessionIdentity(roomId: string): string {
+  const key = `shoom-identity-${roomId}`;
+  let id = sessionStorage.getItem(key);
+  if (!id) {
+    id = `user-${Math.random().toString(36).substring(2, 8)}`;
+    sessionStorage.setItem(key, id);
+  }
+  return id;
+}
+
 function DualSpeakerView({ activePlayer }: { activePlayer: 'A' | 'B' | null }) {
   const tracks = useTracks([Track.Source.Camera]);
 
@@ -134,23 +144,32 @@ function DualSpeakerView({ activePlayer }: { activePlayer: 'A' | 'B' | null }) {
 function AutoPublishMedia({ enabled }: { enabled: boolean }) {
   const { localParticipant } = useLocalParticipant();
   const connectionState = useConnectionState();
+  const hasStartedRef = useRef(false);
 
   useEffect(() => {
     const run = async () => {
       try {
-        if (connectionState !== ConnectionState.Connected) return;
+        if (connectionState !== ConnectionState.Connected) {
+          hasStartedRef.current = false;
+          return;
+        }
 
         if (!enabled) {
+          hasStartedRef.current = false;
           await localParticipant.setCameraEnabled(false);
           await localParticipant.setMicrophoneEnabled(false);
           return;
         }
+
+        if (hasStartedRef.current) return;
+        hasStartedRef.current = true;
 
         await localParticipant.setMicrophoneEnabled(true);
         await localParticipant.setCameraEnabled(true);
         console.log('🎤📷 Local media enabled after stable connection');
       } catch (err) {
         console.error('AutoPublishMedia error:', err);
+        hasStartedRef.current = false;
       }
     };
 
@@ -209,7 +228,8 @@ function VictoryOverlay({
 }
 
 export default function DebateRoom() {
-  const [role, setRole] = useState<Role>('viewer');
+  const [uiRole, setUiRole] = useState<Role>('viewer');
+  const [lkRole, setLkRole] = useState<'viewer' | 'debater'>('viewer');
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [floatingEmojis, setFloatingEmojis] = useState<FloatingEmoji[]>([]);
@@ -227,18 +247,23 @@ export default function DebateRoom() {
   const socketRef = useRef<Socket | null>(null);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
 
+  const handleRoleChange = (newRole: Role) => {
+    setUiRole(newRole);
+    const newLkRole = newRole === 'debater' ? 'debater' : 'viewer';
+    if (newLkRole !== lkRole) {
+      setLkRole(newLkRole);
+    }
+  };
+
   useEffect(() => {
     const fetchToken = async () => {
       try {
-        setToken('');
         const API_URL = getApiUrl();
         const pathSegments = window.location.pathname.split('/');
         const roomIdFromUrl = pathSegments[pathSegments.length - 1] || 'debate-room';
-
-        const participantName = `${role}-${Math.random().toString(36).substring(7)}`;
-        const lkRole = role === 'debater' ? 'debater' : 'viewer';
+        const identity = getOrCreateSessionIdentity(roomIdFromUrl);
         const res = await fetch(
-          `${API_URL}/api/token?roomName=${encodeURIComponent(roomIdFromUrl)}&participantName=${encodeURIComponent(participantName)}&role=${encodeURIComponent(lkRole)}`
+          `${API_URL}/api/token?roomName=${encodeURIComponent(roomIdFromUrl)}&participantName=${encodeURIComponent(identity)}&role=${encodeURIComponent(lkRole)}`
         );
         const data = await res.json();
         setToken(data.token);
@@ -247,7 +272,7 @@ export default function DebateRoom() {
       }
     };
     fetchToken();
-  }, [role]);
+  }, [lkRole]);
 
   useEffect(() => {
     if (serverState.phase === 'voting' || serverState.phase === 'finished') {
@@ -306,7 +331,7 @@ export default function DebateRoom() {
   const sendChatMessage = (text: string, isDonation = false, amount = 0) => {
     if (!socketRef.current) return;
     socketRef.current.emit('send_message', {
-      user: role === 'admin' ? 'Admin' : 'Me',
+      user: uiRole === 'admin' ? 'Admin' : 'Me',
       text,
       isDonation,
       amount,
@@ -355,10 +380,10 @@ export default function DebateRoom() {
     <div className="h-[100dvh] w-full flex flex-col md:flex-row bg-black text-white overflow-hidden">
       <div className="flex-1 relative flex flex-col min-h-0">
         <LiveKitRoom
-          key={token}
           video={false}
           audio={false}
           token={token}
+          connect={!!token}
           serverUrl={process.env.NEXT_PUBLIC_LIVEKIT_URL || 'wss://shoom-1bcua3f5.livekit.cloud'}
           data-lk-theme="default"
           className="h-full w-full flex flex-col"
@@ -366,7 +391,7 @@ export default function DebateRoom() {
           onDisconnected={() => console.log('❌ LiveKit Disconnected')}
           onError={(err) => console.error('🚨 LiveKit Error:', err)}
         >
-          <AutoPublishMedia enabled={role === 'debater'} />
+          <AutoPublishMedia enabled={uiRole === 'debater'} />
 
           <div className="flex-1 min-h-0 w-full relative">
             <DualSpeakerView activePlayer={serverState.activePlayer} />
@@ -386,9 +411,9 @@ export default function DebateRoom() {
               {(['viewer', 'admin', 'debater'] as Role[]).map((r) => (
                 <button
                   key={r}
-                  onClick={() => setRole(r)}
+                  onClick={() => handleRoleChange(r)}
                   className={`px-2 py-0.5 text-[8px] md:text-[10px] uppercase font-bold rounded ${
-                    role === r ? 'bg-blue-600 text-white' : 'bg-black/50 text-slate-400'
+                    uiRole === r ? 'bg-blue-600 text-white' : 'bg-black/50 text-slate-400'
                   }`}
                 >
                   {r}
@@ -396,7 +421,7 @@ export default function DebateRoom() {
               ))}
             </div>
 
-            {role === 'admin' && (
+            {uiRole === 'admin' && (
               <div className="absolute bottom-2 left-2 flex gap-1 bg-black/80 p-1 rounded-lg z-20">
                 <button onClick={() => sendAdminAction('start')} className="p-2 hover:bg-green-600 rounded-lg text-white">
                   <Play size={14} />
@@ -446,7 +471,7 @@ export default function DebateRoom() {
           <div ref={chatEndRef} />
         </div>
 
-        {role === 'viewer' && (
+        {uiRole === 'viewer' && (
           <div className="p-2 flex justify-center gap-4 border-t border-slate-800 bg-slate-900">
             <button onClick={() => sendReaction('heart')} className="text-xl hover:scale-125 transition-transform">
               ❤️
