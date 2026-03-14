@@ -24,7 +24,12 @@ export default function Lobby() {
   useEffect(() => {
     const fetchRooms = async () => {
       try {
-        const res = await fetch('http://localhost:3001/api/rooms');
+        const API_URL = typeof window !== 'undefined' && 
+          window.location.hostname !== 'localhost'
+            ? 'https://shoom.fun'
+            : 'http://localhost:3001';
+
+        const res = await fetch(`${API_URL}/api/rooms`);
         const data = await res.json();
         setRooms(data);
       } catch (error) {
