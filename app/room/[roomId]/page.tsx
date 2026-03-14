@@ -230,6 +230,7 @@ function VictoryOverlay({
 export default function DebateRoom() {
   const [uiRole, setUiRole] = useState<Role>('viewer');
   const [lkRole, setLkRole] = useState<'viewer' | 'debater'>('viewer');
+  const [mySlot, setMySlot] = useState<'A' | 'B' | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [floatingEmojis, setFloatingEmojis] = useState<FloatingEmoji[]>([]);
@@ -256,23 +257,57 @@ export default function DebateRoom() {
   };
 
   useEffect(() => {
-    const fetchToken = async () => {
+    const initRoom = async () => {
       try {
         const API_URL = getApiUrl();
         const pathSegments = window.location.pathname.split('/');
-        const roomIdFromUrl = pathSegments[pathSegments.length - 1] || 'debate-room';
+        const roomIdFromUrl =
+          pathSegments[pathSegments.length - 1] || 'debate-room';
         const identity = getOrCreateSessionIdentity(roomIdFromUrl);
-        const res = await fetch(
-          `${API_URL}/api/token?roomName=${encodeURIComponent(roomIdFromUrl)}&participantName=${encodeURIComponent(identity)}&role=${encodeURIComponent(lkRole)}`
+
+        // Берём сохранённую роль или получаем через join
+        let role = sessionStorage.getItem(`shoom-role-${roomIdFromUrl}`);
+        let slot = sessionStorage.getItem(`shoom-slot-${roomIdFromUrl}`);
+
+        if (!role) {
+          const joinRes = await fetch(
+            `${API_URL}/api/rooms/${roomIdFromUrl}/join`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'include',
+              body: JSON.stringify({ identity }),
+            }
+          );
+          const data = await joinRes.json();
+          role = data.role;
+          slot = data.slot;
+          sessionStorage.setItem(
+            `shoom-role-${roomIdFromUrl}`,
+            role || 'viewer'
+          );
+          sessionStorage.setItem(
+            `shoom-slot-${roomIdFromUrl}`,
+            slot || ''
+          );
+        }
+
+        const lkRoleValue = role === 'debater' ? 'debater' : 'viewer';
+        setUiRole(role === 'debater' ? 'debater' : 'viewer');
+        setLkRole(lkRoleValue);
+        setMySlot((slot as 'A' | 'B') || null);
+
+        const tokenRes = await fetch(
+          `${API_URL}/api/token?roomName=${encodeURIComponent(roomIdFromUrl)}&participantName=${encodeURIComponent(identity)}&role=${encodeURIComponent(lkRoleValue)}`
         );
-        const data = await res.json();
-        setToken(data.token);
+        const tokenData = await tokenRes.json();
+        setToken(tokenData.token);
       } catch (error) {
-        console.error('Token fetch error:', error);
+        console.error('initRoom error:', error);
       }
     };
-    fetchToken();
-  }, [lkRole]);
+    initRoom();
+  }, []);
 
   useEffect(() => {
     if (serverState.phase === 'voting' || serverState.phase === 'finished') {
@@ -288,11 +323,12 @@ export default function DebateRoom() {
     const API_URL = getApiUrl();
     const pathSegments = window.location.pathname.split('/');
     const roomIdFromUrl = pathSegments[pathSegments.length - 1] || 'debate-room';
+    const identity = getOrCreateSessionIdentity(roomIdFromUrl);
 
     console.log('Connecting to socket:', API_URL);
     const socket = io(API_URL, {
       transports: ['websocket', 'polling'],
-      query: { roomId: roomIdFromUrl },
+      query: { roomId: roomIdFromUrl, identity },
       withCredentials: true,
       reconnection: true,
     });
@@ -408,7 +444,7 @@ export default function DebateRoom() {
             </div>
 
             <div className="absolute top-2 left-1/2 transform -translate-x-1/2 flex gap-1 z-20">
-              {(['viewer', 'admin', 'debater'] as Role[]).map((r) => (
+              {typeof window !== 'undefined' && window.location.hostname === 'localhost' && (['viewer', 'admin', 'debater'] as Role[]).map((r) => (
                 <button
                   key={r}
                   onClick={() => handleRoleChange(r)}
@@ -421,16 +457,13 @@ export default function DebateRoom() {
               ))}
             </div>
 
-            {uiRole === 'admin' && (
-              <div className="absolute bottom-2 left-2 flex gap-1 bg-black/80 p-1 rounded-lg z-20">
-                <button onClick={() => sendAdminAction('start')} className="p-2 hover:bg-green-600 rounded-lg text-white">
-                  <Play size={14} />
-                </button>
-                <button onClick={() => sendAdminAction('next_round')} className="p-2 hover:bg-blue-600 rounded-lg text-white">
-                  <SkipForward size={14} />
-                </button>
-                <button onClick={() => sendAdminAction('reset')} className="p-2 hover:bg-red-600 rounded-lg text-white">
-                  <RotateCcw size={14} />
+            {uiRole === 'debater' && (
+              <div className="absolute bottom-2 left-2 z-20">
+                <button
+                  onClick={() => socketRef.current?.emit('request_extra_rounds')}
+                  className="px-3 py-1.5 bg-black/80 border border-slate-600 hover:border-white text-white text-xs font-bold rounded-lg transition-all"
+                >
+                  +2 раунда
                 </button>
               </div>
             )}

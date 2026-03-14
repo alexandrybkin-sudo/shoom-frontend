@@ -1,37 +1,44 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Flame, Users, Zap, Plus, ArrowRight, Github, Twitter } from 'lucide-react';
 
+interface Room {
+  id: string;
+  phase: string;
+  viewers: number;
+  topic: string;
+  labelA: string;
+  labelB: string;
+  hasDebaterA: boolean;
+  hasDebaterB: boolean;
+  isOpen: boolean;
+  isLive: boolean;
+}
+
 export default function Lobby() {
   const router = useRouter();
-  const [topic, setTopic] = useState('');
+  const [rooms, setRooms] = useState<Room[]>([]);
 
-  const createRoom = () => {
-    if (!topic.trim()) return;
-    // Генерируем ID: "Elon Musk vs Mark" -> "elon-musk-vs-mark"
-    const roomId = topic.toLowerCase()
-      .replace(/\s+/g, '-')
-      .replace(/[^\w-]/g, '')
-      .slice(0, 50);
+  useEffect(() => {
+    const fetchRooms = async () => {
+      try {
+        const res = await fetch('http://localhost:3001/api/rooms');
+        const data = await res.json();
+        setRooms(data);
+      } catch (error) {
+        console.error('Failed to fetch rooms:', error);
+      }
+    };
 
-    if (roomId) {
-      router.push(`/room/${roomId}`);
-    }
-  };
+    fetchRooms();
+    const interval = setInterval(fetchRooms, 3000);
+    return () => clearInterval(interval);
+  }, []);
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') createRoom();
-  };
-
-  // Mock Data (в будущем заменим на fetch('/api/rooms'))
-  const activeDebates = [
-    { id: 'ai-art', title: 'AI Art: Theft or Progress?', viewers: 1205, status: 'RAGE' },
-    { id: 'vim-vscode', title: 'Vim vs VS Code', viewers: 892, status: 'ROUND 2' },
-    { id: 'crypto', title: 'Crypto is a Scam', viewers: 450, status: 'VOTING' },
-    { id: 'pineapple', title: 'Pineapple on Pizza', viewers: 120, status: 'WAITING' },
-  ];
+  const openRooms = rooms.filter((r) => r.isOpen);
+  const liveRooms = rooms.filter((r) => r.isLive);
 
   return (
     <div className="min-h-screen bg-[#020617] text-white font-sans selection:bg-red-500/30 overflow-x-hidden">
@@ -63,16 +70,12 @@ export default function Lobby() {
         </p>
 
         {/* Create Input */}
-        <div className="w-full max-w-3xl bg-slate-900/50 border border-white/10 rounded-full p-2 flex items-center gap-2 group cursor-pointer" onClick={() => window.location.reload()}>
-          <input
-            value={topic}
-            onChange={(e) => setTopic(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Enter debate topic (e.g. Earth is Flat)..."
-            className="flex-1 bg-transparent px-4 py-3 md:py-4 text-white placeholder:text-slate-600 focus:outline-none font-bold text-base md:text-lg"
-          />
+        <div className="w-full max-w-3xl bg-slate-900/50 border border-white/10 rounded-full p-2 flex items-center gap-2 group cursor-pointer">
+          <div className="flex-1 bg-transparent px-4 py-3 md:py-4 text-slate-500 font-bold text-base md:text-lg">
+            Ready to fight?
+          </div>
           <button
-            onClick={createRoom}
+            onClick={() => router.push('/create')}
             className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 md:px-8 md:py-4 rounded-full font-black text-sm md:text-base uppercase tracking-wide transition-all hover:scale-105 flex items-center gap-2"
           >
             CREATE BATTLE
@@ -83,46 +86,95 @@ export default function Lobby() {
 
       {/* Live List */}
       <div className="px-6 pb-20">
-        <div className="max-w-6xl mx-auto">
-          <div className="flex justify-between items-center mb-8">
-            <h2 className="text-2xl md:text-3xl font-black">Live Now</h2>
-            <span className="text-xs uppercase tracking-wider text-slate-500 flex items-center gap-2">
-              <Zap className="text-red-500 fill-red-500" size={16} />
-              4 BATTLES ONLINE
-            </span>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {activeDebates.map((room) => (
-              <div
-                key={room.id}
-                onClick={() => router.push(`/room/${room.id}`)}
-                className="group relative bg-slate-900/40 border border-white/5 hover:border-red-500/50 rounded-3xl p-6 cursor-pointer hover:bg-slate-900/80 transition-all hover:-translate-y-1 overflow-hidden"
-              >
-                {/* Glow Effect */}
-                <div className="absolute inset-0 bg-gradient-to-br from-red-600/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"></div>
-
-                <div className="flex justify-between items-start mb-4">
-                  <span className="px-3 py-1 bg-red-600/20 text-red-400 text-xs font-bold rounded-full uppercase tracking-wide">
-                    {room.status}
-                  </span>
-                  <span className="flex items-center gap-1 text-slate-400 text-sm">
-                    <Users size={14} />
-                    {room.viewers}
-                  </span>
-                </div>
-
-                <h3 className="text-xl font-bold mb-4 group-hover:text-red-400 transition-colors">
-                  {room.title}
-                </h3>
-
-                <div className="flex items-center gap-2 text-slate-500 text-sm font-bold group-hover:text-white transition-colors">
-                  WATCH LIVE
-                  <ArrowRight size={16} />
-                </div>
+        <div className="max-w-6xl mx-auto space-y-16">
+          
+          {/* OPEN CHALLENGES */}
+          {openRooms.length > 0 && (
+            <div>
+              <div className="flex justify-between items-center mb-8">
+                <h2 className="text-2xl md:text-3xl font-black">Open Challenges</h2>
+                <span className="text-xs uppercase tracking-wider text-slate-500 flex items-center gap-2">
+                  <Flame className="text-red-500 fill-red-500" size={16} />
+                  {openRooms.length} WAITING
+                </span>
               </div>
-            ))}
-          </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {openRooms.map((room) => (
+                  <div
+                    key={room.id}
+                    onClick={() => router.push(`/room/${room.id}`)}
+                    className="group relative bg-slate-900/40 border border-white/5 hover:border-red-500/50 rounded-3xl p-6 cursor-pointer hover:bg-slate-900/80 transition-all hover:-translate-y-1 overflow-hidden"
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-br from-red-600/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"></div>
+
+                    <div className="flex justify-between items-start mb-4">
+                      <span className="px-3 py-1 bg-red-600 text-white text-xs font-bold rounded-full uppercase tracking-wide">
+                        OPEN CHALLENGE
+                      </span>
+                      <span className="flex items-center gap-1 text-slate-400 text-sm">
+                        <Users size={14} />
+                        {room.viewers}
+                      </span>
+                    </div>
+
+                    <h3 className="text-xl font-bold mb-4 group-hover:text-red-400 transition-colors">
+                      {room.topic}
+                    </h3>
+
+                    <div className="flex items-center gap-2 text-slate-500 text-sm font-bold group-hover:text-white transition-colors">
+                      ПРИНЯТЬ ВЫЗОВ
+                      <ArrowRight size={16} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* LIVE NOW */}
+          {liveRooms.length > 0 && (
+            <div>
+              <div className="flex justify-between items-center mb-8">
+                <h2 className="text-2xl md:text-3xl font-black">Live Now</h2>
+                <span className="text-xs uppercase tracking-wider text-slate-500 flex items-center gap-2">
+                  <Zap className="text-red-500 fill-red-500" size={16} />
+                  {liveRooms.length} BATTLES ONLINE
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {liveRooms.map((room) => (
+                  <div
+                    key={room.id}
+                    onClick={() => router.push(`/room/${room.id}`)}
+                    className="group relative bg-slate-900/40 border border-white/5 hover:border-red-500/50 rounded-3xl p-6 cursor-pointer hover:bg-slate-900/80 transition-all hover:-translate-y-1 overflow-hidden"
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-br from-red-600/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"></div>
+
+                    <div className="flex justify-between items-start mb-4">
+                      <span className="px-3 py-1 bg-red-600/20 text-red-400 text-xs font-bold rounded-full uppercase tracking-wide">
+                        {room.phase}
+                      </span>
+                      <span className="flex items-center gap-1 text-slate-400 text-sm">
+                        <Users size={14} />
+                        {room.viewers}
+                      </span>
+                    </div>
+
+                    <h3 className="text-xl font-bold mb-4 group-hover:text-red-400 transition-colors">
+                      {room.topic}
+                    </h3>
+
+                    <div className="flex items-center gap-2 text-slate-500 text-sm font-bold group-hover:text-white transition-colors">
+                      WATCH LIVE
+                      <ArrowRight size={16} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
