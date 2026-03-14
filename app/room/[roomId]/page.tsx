@@ -147,6 +147,10 @@ function AutoPublishMedia({ enabled }: { enabled: boolean }) {
   const hasStartedRef = useRef(false);
 
   useEffect(() => {
+    console.log('🔄 AutoPublishMedia state:', { enabled, connectionState });
+  }, [enabled, connectionState]);
+
+  useEffect(() => {
     const run = async () => {
       try {
         if (connectionState !== ConnectionState.Connected) {
@@ -427,7 +431,7 @@ export default function DebateRoom() {
           onDisconnected={() => console.log('❌ LiveKit Disconnected')}
           onError={(err) => console.error('🚨 LiveKit Error:', err)}
         >
-          <AutoPublishMedia enabled={uiRole === 'debater'} />
+          <AutoPublishMedia enabled={uiRole === 'debater' || lkRole === 'debater'} />
 
           <div className="flex-1 min-h-0 w-full relative">
             <DualSpeakerView activePlayer={serverState.activePlayer} />

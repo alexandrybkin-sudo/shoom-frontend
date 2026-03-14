@@ -24,22 +24,32 @@ export default function Lobby() {
   useEffect(() => {
     const fetchRooms = async () => {
       try {
-        const API_URL = typeof window !== 'undefined' && 
-          window.location.hostname !== 'localhost'
-            ? 'https://shoom.fun'
-            : 'http://localhost:3001';
-            
-        const res = await fetch(`${API_URL}/api/rooms`);
-        const data = await res.json();
-        setRooms(data);
+        const API_URL = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
+          ? 'https://shoom.fun'
+          : 'http://localhost:3001';
+
+        const res = await fetch(`${API_URL}/api/rooms`, { 
+          cache: 'no-store',
+          headers: { 'Cache-Control': 'no-cache' } 
+        });
+        
+        if (res.ok) {
+          const data = await res.json();
+          setRooms(data);
+        }
       } catch (error) {
         console.error('Failed to fetch rooms:', error);
       }
     };
 
+    // Загружаем сразу при открытии
     fetchRooms();
-    const interval = setInterval(fetchRooms, 3000);
-    return () => clearInterval(interval);
+
+    // Обновляем каждые 3 секунды
+    const intervalId = setInterval(fetchRooms, 3000);
+
+    // Очищаем интервал при уходе со страницы
+    return () => clearInterval(intervalId);
   }, []);
 
   const openRooms = rooms.filter((r) => r.isOpen);
