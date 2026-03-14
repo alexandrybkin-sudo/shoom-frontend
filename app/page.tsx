@@ -28,7 +28,7 @@ export default function Lobby() {
           window.location.hostname !== 'localhost'
             ? 'https://shoom.fun'
             : 'http://localhost:3001';
-
+            
         const res = await fetch(`${API_URL}/api/rooms`);
         const data = await res.json();
         setRooms(data);
