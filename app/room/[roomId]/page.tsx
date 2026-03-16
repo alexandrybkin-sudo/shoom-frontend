@@ -8,8 +8,6 @@ import {
   ParticipantTile,
   useTracks,
   RoomAudioRenderer,
-  useLocalParticipant,
-  useConnectionState,
 } from '@livekit/components-react';
 import '@livekit/components-styles';
 import { Track, ConnectionState } from 'livekit-client';
@@ -141,47 +139,6 @@ function DualSpeakerView({ activePlayer }: { activePlayer: 'A' | 'B' | null }) {
   );
 }
 
-function AutoPublishMedia({ enabled }: { enabled: boolean }) {
-  const { localParticipant } = useLocalParticipant();
-  const connectionState = useConnectionState();
-  const hasStartedRef = useRef(false);
-
-  useEffect(() => {
-    console.log('🔄 AutoPublishMedia state:', { enabled, connectionState });
-  }, [enabled, connectionState]);
-
-  useEffect(() => {
-    const run = async () => {
-      try {
-        if (connectionState !== ConnectionState.Connected) {
-          hasStartedRef.current = false;
-          return;
-        }
-
-        if (!enabled) {
-          hasStartedRef.current = false;
-          await localParticipant.setCameraEnabled(false);
-          await localParticipant.setMicrophoneEnabled(false);
-          return;
-        }
-
-        if (hasStartedRef.current) return;
-        hasStartedRef.current = true;
-
-        await localParticipant.setMicrophoneEnabled(true);
-        await localParticipant.setCameraEnabled(true);
-        console.log('🎤📷 Local media enabled after stable connection');
-      } catch (err) {
-        console.error('AutoPublishMedia error:', err);
-        hasStartedRef.current = false;
-      }
-    };
-
-    run();
-  }, [enabled, connectionState, localParticipant]);
-
-  return null;
-}
 
 function VictoryOverlay({
   phase,
@@ -420,8 +377,8 @@ export default function DebateRoom() {
     <div className="h-[100dvh] w-full flex flex-col md:flex-row bg-black text-white overflow-hidden">
       <div className="flex-1 relative flex flex-col min-h-0">
         <LiveKitRoom
-          video={false}
-          audio={false}
+          video={uiRole === 'debater' || lkRole === 'debater'}
+          audio={uiRole === 'debater' || lkRole === 'debater'}
           token={token}
           connect={!!token}
           serverUrl={process.env.NEXT_PUBLIC_LIVEKIT_URL || 'wss://shoom-1bcua3f5.livekit.cloud'}
@@ -431,8 +388,6 @@ export default function DebateRoom() {
           onDisconnected={() => console.log('❌ LiveKit Disconnected')}
           onError={(err) => console.error('🚨 LiveKit Error:', err)}
         >
-          <AutoPublishMedia enabled={uiRole === 'debater' || lkRole === 'debater'} />
-
           <div className="flex-1 min-h-0 w-full relative">
             <DualSpeakerView activePlayer={serverState.activePlayer} />
             <RoomAudioRenderer />
