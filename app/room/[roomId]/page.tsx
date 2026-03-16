@@ -59,7 +59,7 @@ function DualSpeakerView({ activePlayer }: { activePlayer: 'A' | 'B' | null }) {
   const tracks = useTracks([Track.Source.Camera]);
 
   const cameraTracks = tracks
-    .filter((t: any) => !!t?.publication?.track && !!t?.participant?.identity)
+    .filter((t: any) => t.participant && t.participant.identity)
     .sort((a: any, b: any) =>
       a.participant.identity.localeCompare(b.participant.identity)
     );
@@ -377,8 +377,9 @@ export default function DebateRoom() {
     <div className="h-[100dvh] w-full flex flex-col md:flex-row bg-black text-white overflow-hidden">
       <div className="flex-1 relative flex flex-col min-h-0">
         <LiveKitRoom
-          video={uiRole === 'debater' || lkRole === 'debater'}
-          audio={uiRole === 'debater' || lkRole === 'debater'}
+          key={token}
+          video={lkRole === 'debater'}
+          audio={lkRole === 'debater'}
           token={token}
           connect={!!token}
           serverUrl={process.env.NEXT_PUBLIC_LIVEKIT_URL || 'wss://shoom-1bcua3f5.livekit.cloud'}
