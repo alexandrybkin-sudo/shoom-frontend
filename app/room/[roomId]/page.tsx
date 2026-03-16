@@ -397,7 +397,7 @@ export default function DebateRoom() {
           token={token}
           connect={!!token}
           options={roomOptions}
-          serverUrl={process.env.NEXT_PUBLIC_LIVEKIT_URL || 'wss://shoom-1bcua3f5.livekit.cloud'}
+          serverUrl={process.env.NEXT_PUBLIC_LIVEKIT_URL!}
           data-lk-theme="default"
           className="h-full w-full flex flex-col"
           onConnected={() => console.log('✅ LiveKit Connected')}
