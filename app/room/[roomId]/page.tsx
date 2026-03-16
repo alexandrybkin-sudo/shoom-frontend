@@ -10,7 +10,7 @@ import {
   RoomAudioRenderer,
 } from '@livekit/components-react';
 import '@livekit/components-styles';
-import { Track, ConnectionState } from 'livekit-client';
+import { Track, ConnectionState, Room, RoomOptions } from 'livekit-client';
 
 type Phase = 'waiting' | 'intro' | 'roundA' | 'roundB' | 'ad' | 'voting' | 'rage' | 'finished';
 type Role = 'viewer' | 'admin' | 'debater';
@@ -209,6 +209,20 @@ export default function DebateRoom() {
   const socketRef = useRef<Socket | null>(null);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
 
+  const roomOptions = React.useMemo<RoomOptions>(() => {
+    return {
+      adaptiveStream: true,
+      dynacast: true,
+      publishDefaults: {
+        simulcast: true,
+      },
+      // Это заставит LiveKit быстрее переключаться на TCP/TURN если UDP заблокирован
+      rtcConfig: {
+        iceTransportPolicy: 'all',
+      },
+    };
+  }, []);
+
   const handleRoleChange = (newRole: Role) => {
     setUiRole(newRole);
     const newLkRole = newRole === 'debater' ? 'debater' : 'viewer';
@@ -382,6 +396,7 @@ export default function DebateRoom() {
           audio={lkRole === 'debater'}
           token={token}
           connect={!!token}
+          options={roomOptions}
           serverUrl={process.env.NEXT_PUBLIC_LIVEKIT_URL || 'wss://shoom-1bcua3f5.livekit.cloud'}
           data-lk-theme="default"
           className="h-full w-full flex flex-col"
