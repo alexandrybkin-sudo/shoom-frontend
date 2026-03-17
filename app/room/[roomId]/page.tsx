@@ -10,7 +10,7 @@ import {
   RoomAudioRenderer,
 } from '@livekit/components-react';
 import '@livekit/components-styles';
-import { Track, ConnectionState, Room, RoomOptions } from 'livekit-client';
+import { Track, ConnectionState, Room, RoomOptions, VideoPresets } from 'livekit-client';
 
 type Phase = 'waiting' | 'intro' | 'roundA' | 'roundB' | 'ad' | 'voting' | 'rage' | 'finished';
 type Role = 'viewer' | 'admin' | 'debater';
@@ -215,8 +215,8 @@ export default function DebateRoom() {
       dynacast: true,
       publishDefaults: {
         videoSimulcastLayers: [
-          { resolution: { width: 640, height: 480 }, encoding: { maxBitrate: 500_000, maxFramerate: 30 } },
-          { resolution: { width: 1280, height: 720 }, encoding: { maxBitrate: 1_500_000, maxFramerate: 30 } },
+          VideoPresets.h360,
+          VideoPresets.h720
         ],
       },
     };
