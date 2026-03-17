@@ -214,11 +214,10 @@ export default function DebateRoom() {
       adaptiveStream: true,
       dynacast: true,
       publishDefaults: {
-        simulcast: true,
-      },
-      // Это заставит LiveKit быстрее переключаться на TCP/TURN если UDP заблокирован
-      rtcConfig: {
-        iceTransportPolicy: 'all',
+        videoSimulcastLayers: [
+          { width: 640, height: 480, encoding: { maxBitrate: 500000, maxFramerate: 30 } },
+          { width: 1280, height: 720, encoding: { maxBitrate: 1500000, maxFramerate: 30 } },
+        ],
       },
     };
   }, []);
