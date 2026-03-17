@@ -215,8 +215,8 @@ export default function DebateRoom() {
       dynacast: true,
       publishDefaults: {
         videoSimulcastLayers: [
-          { width: 640, height: 480, encoding: { maxBitrate: 500000, maxFramerate: 30 } },
-          { width: 1280, height: 720, encoding: { maxBitrate: 1500000, maxFramerate: 30 } },
+          { resolution: { width: 640, height: 480 }, encoding: { maxBitrate: 500_000, maxFramerate: 30 } },
+          { resolution: { width: 1280, height: 720 }, encoding: { maxBitrate: 1_500_000, maxFramerate: 30 } },
         ],
       },
     };
