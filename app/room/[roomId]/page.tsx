@@ -8,11 +8,12 @@ import {
   ParticipantTile,
   useTracks,
   RoomAudioRenderer,
+  useLocalParticipant,
 } from '@livekit/components-react';
 import '@livekit/components-styles';
 import { Track, ConnectionState, Room, RoomOptions, VideoPresets } from 'livekit-client';
 
-type Phase = 'waiting' | 'intro' | 'roundA' | 'roundB' | 'ad' | 'voting' | 'rage' | 'finished';
+type Phase = 'waiting' | 'round' | 'rageRound' | 'finished';
 type Role = 'viewer' | 'admin' | 'debater';
 
 interface Message {
@@ -31,8 +32,12 @@ interface FloatingEmoji {
 
 interface ServerState {
   phase: Phase;
+  currentRound: number;
+  roundsTotal: number;
+  activeSpeaker: 'A' | 'B' | null;
+  rageRoundEndsAt: number | null;
+  roundEndsAt: number | null;
   timeLeft: number;
-  activePlayer: 'A' | 'B' | null;
   viewersCount: number;
   chatMessages: Message[];
   donations: { user: string; amount: number }[];
@@ -55,7 +60,7 @@ function getOrCreateSessionIdentity(roomId: string): string {
   return id;
 }
 
-function DualSpeakerView({ activePlayer }: { activePlayer: 'A' | 'B' | null }) {
+function DualSpeakerView({ activeSpeaker }: { activeSpeaker: 'A' | 'B' | null }) {
   const tracks = useTracks([Track.Source.Camera]);
 
   const cameraTracks = tracks
@@ -80,7 +85,7 @@ function DualSpeakerView({ activePlayer }: { activePlayer: 'A' | 'B' | null }) {
     <div className="flex flex-col md:flex-row w-full h-full bg-black gap-1 p-1">
       <div
         className={`flex-1 relative rounded-lg overflow-hidden border-4 ${
-          activePlayer === 'A'
+          activeSpeaker === 'A'
             ? 'border-red-500 ring-4 ring-red-500/50'
             : 'border-transparent'
         } transition-all min-h-0`}
@@ -109,7 +114,7 @@ function DualSpeakerView({ activePlayer }: { activePlayer: 'A' | 'B' | null }) {
 
       <div
         className={`flex-1 relative rounded-lg overflow-hidden border-4 ${
-          activePlayer === 'B'
+          activeSpeaker === 'B'
             ? 'border-blue-500 ring-4 ring-blue-500/50'
             : 'border-transparent'
         } transition-all min-h-0`}
@@ -151,13 +156,13 @@ function VictoryOverlay({
   onClose: () => void;
   isVisible: boolean;
 }) {
-  if (!isVisible || (phase !== 'voting' && phase !== 'finished')) return null;
+  if (!isVisible || phase !== 'finished') return null;
 
   return (
     <div className="absolute inset-0 bg-black/90 flex items-center justify-center z-50 backdrop-blur-sm animate-fade-in">
       <div className="text-center px-4">
         <h2 className="text-3xl md:text-6xl font-black uppercase tracking-wider mb-8 md:mb-12 text-white">
-          {phase === 'voting' ? 'WHO WON?' : 'WINNER IS...'}
+          WHO WON?
         </h2>
         <div className="flex flex-col md:flex-row items-center gap-4 md:gap-8">
           <div className="flex flex-col items-center gap-2">
@@ -188,6 +193,41 @@ function VictoryOverlay({
   );
 }
 
+function DebateLogic({
+  serverState,
+  lkRole,
+  mySlot,
+}: {
+  serverState: ServerState;
+  lkRole: string;
+  mySlot: 'A' | 'B' | null;
+}) {
+  const { localParticipant } = useLocalParticipant();
+
+  useEffect(() => {
+    if (lkRole !== 'debater' || !localParticipant || !mySlot) return;
+
+    const updateMic = async () => {
+      try {
+        if (serverState.phase === 'round') {
+          if (serverState.activeSpeaker === mySlot) {
+            await localParticipant.setMicrophoneEnabled(true);
+          } else {
+            await localParticipant.setMicrophoneEnabled(false);
+          }
+        } else if (serverState.phase === 'rageRound') {
+          await localParticipant.setMicrophoneEnabled(true);
+        }
+      } catch (e) {
+        console.error('Failed to update mic', e);
+      }
+    };
+    updateMic();
+  }, [serverState.phase, serverState.activeSpeaker, lkRole, mySlot, localParticipant]);
+
+  return null;
+}
+
 export default function DebateRoom() {
   const [uiRole, setUiRole] = useState<Role>('viewer');
   const [lkRole, setLkRole] = useState<'viewer' | 'debater'>('viewer');
@@ -199,8 +239,12 @@ export default function DebateRoom() {
   const [showVoteModal, setShowVoteModal] = useState(false);
   const [serverState, setServerState] = useState<ServerState>({
     phase: 'waiting',
+    currentRound: 0,
+    roundsTotal: 0,
+    activeSpeaker: null,
+    rageRoundEndsAt: null,
+    roundEndsAt: null,
     timeLeft: 0,
-    activePlayer: null,
     viewersCount: 0,
     chatMessages: [],
     donations: [],
@@ -284,7 +328,7 @@ export default function DebateRoom() {
   }, []);
 
   useEffect(() => {
-    if (serverState.phase === 'voting' || serverState.phase === 'finished') {
+    if (serverState.phase === 'finished') {
       setShowVoteModal(true);
     } else {
       setShowVoteModal(false);
@@ -314,6 +358,7 @@ export default function DebateRoom() {
     socket.on('disconnect', (reason) => console.log('⚠️ SOCKET DISCONNECTED:', reason));
 
     socket.on('state_update', setServerState);
+    socket.on('debate-state-updated', setServerState);
 
     socket.on('chat_update', (newMsg: Message) => {
       setMessages((prev) => {
@@ -404,7 +449,8 @@ export default function DebateRoom() {
           onError={(err) => console.error('🚨 LiveKit Error:', err)}
         >
           <div className="flex-1 min-h-0 w-full relative">
-            <DualSpeakerView activePlayer={serverState.activePlayer} />
+            <DebateLogic serverState={serverState} lkRole={lkRole} mySlot={mySlot} />
+            <DualSpeakerView activeSpeaker={serverState.activeSpeaker} />
             <RoomAudioRenderer />
 
             <div className="absolute top-2 left-2 bg-black/70 text-white px-3 py-1 rounded-full text-xs md:text-sm font-mono font-bold z-10">
@@ -416,6 +462,17 @@ export default function DebateRoom() {
             <div className="absolute bottom-2 right-2 bg-black/70 text-white px-3 py-1 rounded-full text-xs md:text-sm font-mono z-10">
               👁️ {serverState.viewersCount}
             </div>
+
+            {serverState.phase === 'rageRound' && (
+              <div className="absolute top-16 left-1/2 transform -translate-x-1/2 flex flex-col items-center z-30 animate-pulse">
+                <div className="text-4xl md:text-6xl font-black text-red-600 uppercase tracking-widest drop-shadow-[0_0_15px_rgba(220,38,38,0.8)]">
+                  RAGE ROUND
+                </div>
+                <div className="text-xl md:text-2xl font-mono font-bold text-white mt-2 bg-black/50 px-4 py-1 rounded-full">
+                  {formatTime(serverState.timeLeft)}
+                </div>
+              </div>
+            )}
 
             <div className="absolute top-2 left-1/2 transform -translate-x-1/2 flex gap-1 z-20">
               {typeof window !== 'undefined' && window.location.hostname === 'localhost' && (['viewer', 'admin', 'debater'] as Role[]).map((r) => (
