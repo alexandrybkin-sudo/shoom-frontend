@@ -8,7 +8,6 @@ import {
   ParticipantTile,
   useTracks,
   RoomAudioRenderer,
-  useLocalParticipant,
 } from '@livekit/components-react';
 import '@livekit/components-styles';
 import { Track, ConnectionState, Room, RoomOptions, VideoPresets } from 'livekit-client';
@@ -191,41 +190,6 @@ function VictoryOverlay({
       </div>
     </div>
   );
-}
-
-function DebateLogic({
-  serverState,
-  lkRole,
-  mySlot,
-}: {
-  serverState: ServerState;
-  lkRole: string;
-  mySlot: 'A' | 'B' | null;
-}) {
-  const { localParticipant } = useLocalParticipant();
-
-  useEffect(() => {
-    if (lkRole !== 'debater' || !localParticipant || !mySlot) return;
-
-    const updateMic = async () => {
-      try {
-        if (serverState.phase === 'round') {
-          if (serverState.activeSpeaker === mySlot) {
-            await localParticipant.setMicrophoneEnabled(true);
-          } else {
-            await localParticipant.setMicrophoneEnabled(false);
-          }
-        } else if (serverState.phase === 'rageRound') {
-          await localParticipant.setMicrophoneEnabled(true);
-        }
-      } catch (e) {
-        console.error('Failed to update mic', e);
-      }
-    };
-    updateMic();
-  }, [serverState.phase, serverState.activeSpeaker, lkRole, mySlot, localParticipant]);
-
-  return null;
 }
 
 export default function DebateRoom() {
@@ -449,7 +413,6 @@ export default function DebateRoom() {
           onError={(err) => console.error('🚨 LiveKit Error:', err)}
         >
           <div className="flex-1 min-h-0 w-full relative">
-            <DebateLogic serverState={serverState} lkRole={lkRole} mySlot={mySlot} />
             <DualSpeakerView activeSpeaker={serverState.activeSpeaker} />
             <RoomAudioRenderer />
 
