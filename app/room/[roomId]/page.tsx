@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
-import { Play, SkipForward, RotateCcw } from 'lucide-react';
+import { Eye, Mic, MicOff, Flame, Coins, Heart, Plus } from 'lucide-react';
 import {
   LiveKitRoom,
   ParticipantTile,
@@ -10,7 +10,7 @@ import {
   RoomAudioRenderer,
 } from '@livekit/components-react';
 import '@livekit/components-styles';
-import { Track, ConnectionState, Room, RoomOptions, VideoPresets } from 'livekit-client';
+import { Track, RoomOptions, VideoPresets } from 'livekit-client';
 
 type Phase = 'waiting' | 'round' | 'rageRound' | 'finished';
 type Role = 'viewer' | 'admin' | 'debater';
@@ -40,6 +40,9 @@ interface ServerState {
   viewersCount: number;
   chatMessages: Message[];
   donations: { user: string; amount: number }[];
+  topic?: string;
+  labelA?: string;
+  labelB?: string;
 }
 
 function getApiUrl() {
@@ -59,7 +62,80 @@ function getOrCreateSessionIdentity(roomId: string): string {
   return id;
 }
 
-function DualSpeakerView({ activeSpeaker }: { activeSpeaker: 'A' | 'B' | null }) {
+function SpeakerTile({
+  trackRef,
+  side,
+  label,
+  active,
+}: {
+  trackRef: any;
+  side: 'A' | 'B';
+  label: string;
+  active: boolean;
+}) {
+  const isA = side === 'A';
+  const ring = active
+    ? isA
+      ? 'border-sidea glow-sidea'
+      : 'border-sideb glow-sideb'
+    : 'border-transparent';
+  const tagBg = isA ? 'bg-sidea text-brand-ink' : 'bg-sideb text-brand-ink';
+  const dotColor = isA ? 'text-sidea' : 'text-sideb';
+
+  return (
+    <div
+      className={`flex-1 relative rounded-2xl overflow-hidden border-2 ${ring} transition-all min-h-0 ${
+        active ? '' : 'opacity-75'
+      }`}
+    >
+      {trackRef ? (
+        <ParticipantTile trackRef={trackRef} className="h-full w-full" />
+      ) : (
+        <div className="flex flex-col items-center justify-center h-full bg-panel-2 text-center p-4">
+          <div className={`animate-pulse ${dotColor} mb-2 text-lg`}>●</div>
+          <span className="text-fg-faint text-sm font-medium">
+            Waiting {label}…
+          </span>
+        </div>
+      )}
+
+      {/* Speaking / muted state */}
+      {trackRef && (
+        <div className="absolute top-2.5 left-2.5">
+          {active ? (
+            <span className={`inline-flex items-center gap-1.5 ${tagBg} text-[10px] font-bold px-2 py-1 rounded-md`}>
+              <Mic size={12} /> Speaking
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 bg-black/55 text-fg-muted text-[10px] font-medium px-2 py-1 rounded-md">
+              <MicOff size={12} /> Muted
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Name + side */}
+      <div className="absolute bottom-2.5 left-2.5 flex items-center gap-1.5">
+        <span className="text-[11px] font-semibold text-fg bg-black/55 px-2 py-1 rounded-md">
+          {trackRef ? trackRef.participant.identity : label}
+        </span>
+        <span className={`text-[10px] font-bold px-2 py-1 rounded-md uppercase ${tagBg}`}>
+          {label}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function DualSpeakerView({
+  activeSpeaker,
+  labelA,
+  labelB,
+}: {
+  activeSpeaker: 'A' | 'B' | null;
+  labelA: string;
+  labelB: string;
+}) {
   const tracks = useTracks([Track.Source.Camera]);
 
   const cameraTracks = tracks
@@ -68,124 +144,55 @@ function DualSpeakerView({ activeSpeaker }: { activeSpeaker: 'A' | 'B' | null })
       a.participant.identity.localeCompare(b.participant.identity)
     );
 
-  console.log(
-    '🎥 cameraTracks:',
-    cameraTracks.map((t: any) => ({
-      identity: t.participant.identity,
-      isSubscribed: t.publication?.isSubscribed,
-      source: t.source,
-    }))
-  );
-
   const trackA = cameraTracks[0];
   const trackB = cameraTracks[1];
 
   return (
-    <div className="flex flex-col md:flex-row w-full h-full bg-black gap-1 p-1">
-      <div
-        className={`flex-1 relative rounded-lg overflow-hidden border-4 ${
-          activeSpeaker === 'A'
-            ? 'border-red-500 ring-4 ring-red-500/50'
-            : 'border-transparent'
-        } transition-all min-h-0`}
-      >
-        {trackA ? (
-          <ParticipantTile trackRef={trackA} className="h-full w-full" />
-        ) : (
-          <div className="flex flex-col items-center justify-center h-full bg-gray-900 text-center p-4">
-            <div className="animate-pulse text-red-500 mb-2">●</div>
-            <span className="text-slate-500 text-sm md:text-lg font-mono">
-              Waiting Red...
-            </span>
-          </div>
-        )}
-
-        {trackA && (
-          <div className="absolute top-2 left-2 bg-black/50 text-white px-2 py-1 text-xs rounded truncate max-w-[80%]">
-            {trackA.participant.identity}
-          </div>
-        )}
-
-        <div className="absolute bottom-2 left-2 bg-red-600 text-white px-2 py-0.5 rounded text-[10px] md:text-xs font-bold uppercase">
-          Red
-        </div>
-      </div>
-
-      <div
-        className={`flex-1 relative rounded-lg overflow-hidden border-4 ${
-          activeSpeaker === 'B'
-            ? 'border-blue-500 ring-4 ring-blue-500/50'
-            : 'border-transparent'
-        } transition-all min-h-0`}
-      >
-        {trackB ? (
-          <ParticipantTile trackRef={trackB} className="h-full w-full" />
-        ) : (
-          <div className="flex flex-col items-center justify-center h-full bg-gray-900 text-center p-4">
-            <div className="animate-pulse text-blue-500 mb-2">●</div>
-            <span className="text-slate-500 text-sm md:text-lg font-mono">
-              Waiting Blue...
-            </span>
-          </div>
-        )}
-
-        {trackB && (
-          <div className="absolute top-2 left-2 bg-black/50 text-white px-2 py-1 text-xs rounded truncate max-w-[80%]">
-            {trackB.participant.identity}
-          </div>
-        )}
-
-        <div className="absolute bottom-2 left-2 bg-blue-600 text-white px-2 py-0.5 rounded text-[10px] md:text-xs font-bold uppercase">
-          Blue
-        </div>
-      </div>
+    <div className="flex flex-col md:flex-row w-full h-full bg-ink gap-2 p-2">
+      <SpeakerTile trackRef={trackA} side="A" label={labelA} active={activeSpeaker === 'A'} />
+      <SpeakerTile trackRef={trackB} side="B" label={labelB} active={activeSpeaker === 'B'} />
     </div>
   );
 }
 
-
 function VictoryOverlay({
   phase,
   onVote,
-  onClose,
   isVisible,
+  labelA,
+  labelB,
 }: {
   phase: Phase;
   onVote: (team: 'A' | 'B') => void;
-  onClose: () => void;
   isVisible: boolean;
+  labelA: string;
+  labelB: string;
 }) {
   if (!isVisible || phase !== 'finished') return null;
 
   return (
-    <div className="absolute inset-0 bg-black/90 flex items-center justify-center z-50 backdrop-blur-sm animate-fade-in">
+    <div className="absolute inset-0 bg-ink/92 flex items-center justify-center z-50 backdrop-blur-sm animate-fade-in">
       <div className="text-center px-4">
-        <h2 className="text-3xl md:text-6xl font-black uppercase tracking-wider mb-8 md:mb-12 text-white">
-          WHO WON?
+        <p className="text-[11px] text-brand-light uppercase tracking-[0.18em] mb-3 font-medium">
+          The crowd decides
+        </p>
+        <h2 className="text-3xl md:text-5xl font-bold tracking-tight mb-10">
+          Who won?
         </h2>
-        <div className="flex flex-col md:flex-row items-center gap-4 md:gap-8">
-          <div className="flex flex-col items-center gap-2">
-            <div className="text-6xl md:text-8xl">🔴</div>
-            <button
-              onClick={() => onVote('A')}
-              className="px-6 py-2 md:px-10 md:py-4 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white font-black text-sm md:text-2xl uppercase tracking-widest rounded-xl transition-all hover:scale-105 active:scale-95 shadow-xl shadow-red-900/50"
-            >
-              Vote Red
-            </button>
-          </div>
-          <div className="text-2xl md:text-5xl font-black text-slate-600 uppercase">VS</div>
-          <div className="flex flex-col items-center gap-2">
-            <div className="text-6xl md:text-8xl">🔵</div>
-            <button
-              onClick={() => onVote('B')}
-              className="px-6 py-2 md:px-10 md:py-4 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-black text-sm md:text-2xl uppercase tracking-widest rounded-xl transition-all hover:scale-105 active:scale-95 shadow-xl shadow-blue-900/50"
-            >
-              Vote Blue
-            </button>
-          </div>
-        </div>
-        <div className="mt-8 text-slate-400 text-sm md:text-base">
-          <span className="text-red-400">50%</span> &nbsp;|&nbsp; <span className="text-blue-400">50%</span>
+        <div className="flex flex-col md:flex-row items-center gap-4 md:gap-6">
+          <button
+            onClick={() => onVote('A')}
+            className="w-44 px-6 py-4 bg-sidea/15 border-2 border-sidea text-sidea-light font-bold text-lg uppercase tracking-wide rounded-2xl transition-all hover:scale-105 active:scale-95 glow-sidea"
+          >
+            {labelA}
+          </button>
+          <div className="text-xl font-bold text-fg-faint uppercase">vs</div>
+          <button
+            onClick={() => onVote('B')}
+            className="w-44 px-6 py-4 bg-sideb/15 border-2 border-sideb text-sideb-light font-bold text-lg uppercase tracking-wide rounded-2xl transition-all hover:scale-105 active:scale-95 glow-sideb"
+          >
+            {labelB}
+          </button>
         </div>
       </div>
     </div>
@@ -212,6 +219,9 @@ export default function DebateRoom() {
     viewersCount: 0,
     chatMessages: [],
     donations: [],
+    topic: '',
+    labelA: 'Red',
+    labelB: 'Blue',
   });
 
   const socketRef = useRef<Socket | null>(null);
@@ -222,10 +232,7 @@ export default function DebateRoom() {
       adaptiveStream: true,
       dynacast: true,
       publishDefaults: {
-        videoSimulcastLayers: [
-          VideoPresets.h360,
-          VideoPresets.h720
-        ],
+        videoSimulcastLayers: [VideoPresets.h360, VideoPresets.h720],
       },
     };
   }, []);
@@ -243,35 +250,24 @@ export default function DebateRoom() {
       try {
         const API_URL = getApiUrl();
         const pathSegments = window.location.pathname.split('/');
-        const roomIdFromUrl =
-          pathSegments[pathSegments.length - 1] || 'debate-room';
+        const roomIdFromUrl = pathSegments[pathSegments.length - 1] || 'debate-room';
         const identity = getOrCreateSessionIdentity(roomIdFromUrl);
 
-        // Берём сохранённую роль или получаем через join
         let role = sessionStorage.getItem(`shoom-role-${roomIdFromUrl}`);
         let slot = sessionStorage.getItem(`shoom-slot-${roomIdFromUrl}`);
 
         if (!role) {
-          const joinRes = await fetch(
-            `${API_URL}/api/rooms/${roomIdFromUrl}/join`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              credentials: 'include',
-              body: JSON.stringify({ identity }),
-            }
-          );
+          const joinRes = await fetch(`${API_URL}/api/rooms/${roomIdFromUrl}/join`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ identity }),
+          });
           const data = await joinRes.json();
           role = data.role;
           slot = data.slot;
-          sessionStorage.setItem(
-            `shoom-role-${roomIdFromUrl}`,
-            role || 'viewer'
-          );
-          sessionStorage.setItem(
-            `shoom-slot-${roomIdFromUrl}`,
-            slot || ''
-          );
+          sessionStorage.setItem(`shoom-role-${roomIdFromUrl}`, role || 'viewer');
+          sessionStorage.setItem(`shoom-slot-${roomIdFromUrl}`, slot || '');
         }
 
         const lkRoleValue = role === 'debater' ? 'debater' : 'viewer';
@@ -292,11 +288,7 @@ export default function DebateRoom() {
   }, []);
 
   useEffect(() => {
-    if (serverState.phase === 'finished') {
-      setShowVoteModal(true);
-    } else {
-      setShowVoteModal(false);
-    }
+    setShowVoteModal(serverState.phase === 'finished');
   }, [serverState.phase]);
 
   useEffect(() => {
@@ -307,7 +299,6 @@ export default function DebateRoom() {
     const roomIdFromUrl = pathSegments[pathSegments.length - 1] || 'debate-room';
     const identity = getOrCreateSessionIdentity(roomIdFromUrl);
 
-    console.log('Connecting to socket:', API_URL);
     const socket = io(API_URL, {
       transports: ['websocket', 'polling'],
       query: { roomId: roomIdFromUrl, identity },
@@ -316,10 +307,6 @@ export default function DebateRoom() {
     });
 
     socketRef.current = socket;
-
-    socket.on('connect', () => console.log('✅ SOCKET CONNECTED:', socket.id));
-    socket.on('connect_error', (err) => console.error('❌ SOCKET ERROR:', err));
-    socket.on('disconnect', (reason) => console.log('⚠️ SOCKET DISCONNECTED:', reason));
 
     socket.on('state_update', setServerState);
     socket.on('debate-state-updated', setServerState);
@@ -345,8 +332,6 @@ export default function DebateRoom() {
     };
   }, []);
 
-  const sendAdminAction = (action: string) => socketRef.current?.emit('admin_action', { action });
-
   const sendChatMessage = (text: string, isDonation = false, amount = 0) => {
     if (!socketRef.current) return;
     socketRef.current.emit('send_message', {
@@ -369,7 +354,8 @@ export default function DebateRoom() {
     setShowVoteModal(false);
   };
 
-  const sendReaction = (type: 'heart' | 'poop') => socketRef.current?.emit('send_reaction', { type });
+  const sendReaction = (type: 'heart' | 'poop') =>
+    socketRef.current?.emit('send_reaction', { type });
 
   const sendDonation = () =>
     socketRef.current?.emit('send_message', {
@@ -385,19 +371,38 @@ export default function DebateRoom() {
     return `${m}:${s < 10 ? '0' : ''}${s}`;
   };
 
+  const labelA = serverState.labelA || 'Red';
+  const labelB = serverState.labelB || 'Blue';
+
   if (!token)
     return (
-      <div className="flex items-center justify-center h-screen bg-black text-white">
+      <div className="flex items-center justify-center h-screen bg-ink text-fg">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-500 mx-auto mb-4"></div>
-          <p>Loading Room...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand mx-auto mb-4" />
+          <p className="text-fg-muted">Loading room…</p>
         </div>
       </div>
     );
 
   return (
-    <div className="h-[100dvh] w-full flex flex-col md:flex-row bg-black text-white overflow-hidden">
+    <div className="h-[100dvh] w-full flex flex-col md:flex-row bg-ink text-fg overflow-hidden">
       <div className="flex-1 relative flex flex-col min-h-0">
+        {/* Top bar: topic + sides + viewers */}
+        <div className="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-white/5 bg-ink/80 backdrop-blur z-10">
+          <div className="min-w-0">
+            <div className="text-sm font-semibold truncate">{serverState.topic || 'Debate'}</div>
+            <div className="flex items-center gap-2 mt-0.5">
+              <span className="text-[11px] font-semibold text-sidea-light">{labelA}</span>
+              <span className="text-[10px] font-bold text-fg-faint">VS</span>
+              <span className="text-[11px] font-semibold text-sideb-light">{labelB}</span>
+            </div>
+          </div>
+          <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs text-fg-muted">
+            <Eye size={15} />
+            {serverState.viewersCount}
+          </span>
+        </div>
+
         <LiveKitRoom
           key={token}
           video={lkRole === 'debater'}
@@ -407,61 +412,67 @@ export default function DebateRoom() {
           options={roomOptions}
           serverUrl={process.env.NEXT_PUBLIC_LIVEKIT_URL!}
           data-lk-theme="default"
-          className="h-full w-full flex flex-col"
+          className="flex-1 min-h-0 w-full flex flex-col"
           onConnected={() => console.log('✅ LiveKit Connected')}
           onDisconnected={() => console.log('❌ LiveKit Disconnected')}
           onError={(err) => console.error('🚨 LiveKit Error:', err)}
         >
           <div className="flex-1 min-h-0 w-full relative">
-            <DualSpeakerView activeSpeaker={serverState.activeSpeaker} />
+            <DualSpeakerView activeSpeaker={serverState.activeSpeaker} labelA={labelA} labelB={labelB} />
             <RoomAudioRenderer />
 
-            <div className="absolute top-2 left-2 bg-black/70 text-white px-3 py-1 rounded-full text-xs md:text-sm font-mono font-bold z-10">
-              {formatTime(serverState.timeLeft)}
-            </div>
-            <div className="absolute top-2 right-2 bg-black/70 text-white px-3 py-1 rounded-full text-xs md:text-sm font-bold uppercase z-10">
-              {serverState.phase}
-            </div>
-            <div className="absolute bottom-2 right-2 bg-black/70 text-white px-3 py-1 rounded-full text-xs md:text-sm font-mono z-10">
-              👁️ {serverState.viewersCount}
+            {/* Phase + timer HUD */}
+            <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 inline-flex items-center gap-2.5 bg-brand/15 border border-brand/40 text-brand-light text-xs font-semibold px-3.5 py-1.5 rounded-xl backdrop-blur glow-brand">
+              {serverState.phase === 'rageRound' ? (
+                <><Flame size={14} /> Rage round</>
+              ) : serverState.phase === 'round' ? (
+                <><Mic size={14} /> Round {serverState.currentRound} / {serverState.roundsTotal}</>
+              ) : (
+                <span className="uppercase">{serverState.phase}</span>
+              )}
+              <span className="w-px h-3 bg-white/20" />
+              <span className="text-fg font-mono tabular-nums">{formatTime(serverState.timeLeft)}</span>
             </div>
 
+            {/* Rage round banner */}
             {serverState.phase === 'rageRound' && (
-              <div className="absolute top-16 left-1/2 transform -translate-x-1/2 flex flex-col items-center z-30 animate-pulse">
-                <div className="text-4xl md:text-6xl font-black text-red-600 uppercase tracking-widest drop-shadow-[0_0_15px_rgba(220,38,38,0.8)]">
-                  RAGE ROUND
-                </div>
-                <div className="text-xl md:text-2xl font-mono font-bold text-white mt-2 bg-black/50 px-4 py-1 rounded-full">
-                  {formatTime(serverState.timeLeft)}
+              <div className="absolute top-16 left-1/2 -translate-x-1/2 flex flex-col items-center z-30 animate-pulse">
+                <div className="text-4xl md:text-5xl font-bold text-rage uppercase tracking-wide drop-shadow-[0_0_18px_rgba(239,159,39,0.7)]">
+                  Rage round
                 </div>
               </div>
             )}
 
-            <div className="absolute top-2 left-1/2 transform -translate-x-1/2 flex gap-1 z-20">
-              {typeof window !== 'undefined' && window.location.hostname === 'localhost' && (['viewer', 'admin', 'debater'] as Role[]).map((r) => (
-                <button
-                  key={r}
-                  onClick={() => handleRoleChange(r)}
-                  className={`px-2 py-0.5 text-[8px] md:text-[10px] uppercase font-bold rounded ${
-                    uiRole === r ? 'bg-blue-600 text-white' : 'bg-black/50 text-slate-400'
-                  }`}
-                >
-                  {r}
-                </button>
-              ))}
+            {/* Role switcher (local dev only) */}
+            <div className="absolute top-3 left-3 flex gap-1 z-20">
+              {typeof window !== 'undefined' &&
+                window.location.hostname === 'localhost' &&
+                (['viewer', 'admin', 'debater'] as Role[]).map((r) => (
+                  <button
+                    key={r}
+                    onClick={() => handleRoleChange(r)}
+                    className={`px-2 py-0.5 text-[9px] uppercase font-bold rounded ${
+                      uiRole === r ? 'bg-brand text-brand-ink' : 'bg-black/50 text-fg-muted'
+                    }`}
+                  >
+                    {r}
+                  </button>
+                ))}
             </div>
 
+            {/* Extra rounds (debater) */}
             {uiRole === 'debater' && (
-              <div className="absolute bottom-2 left-2 z-20">
+              <div className="absolute bottom-3 left-3 z-20">
                 <button
                   onClick={() => socketRef.current?.emit('request_extra_rounds')}
-                  className="px-3 py-1.5 bg-black/80 border border-slate-600 hover:border-white text-white text-xs font-bold rounded-lg transition-all"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-black/70 border border-white/15 hover:border-white/30 text-fg text-xs font-medium rounded-lg transition-all"
                 >
-                  +2 раунда
+                  <Plus size={14} /> 2 rounds
                 </button>
               </div>
             )}
 
+            {/* Floating reactions */}
             {floatingEmojis.map((emoji) => (
               <div
                 key={emoji.id}
@@ -475,31 +486,47 @@ export default function DebateRoom() {
             <VictoryOverlay
               phase={serverState.phase}
               isVisible={showVoteModal}
-              onClose={() => setShowVoteModal(false)}
               onVote={handleVote}
+              labelA={labelA}
+              labelB={labelB}
             />
           </div>
         </LiveKitRoom>
       </div>
 
-      <div className="h-[35vh] md:h-full w-full md:w-80 flex flex-col bg-slate-900 border-t md:border-t-0 md:border-l border-slate-800 shadow-xl z-40">
-        <div className="p-2 md:p-3 border-b border-slate-800 font-bold text-xs md:text-sm flex justify-between items-center bg-slate-900/90 backdrop-blur">
-          <span>Live Chat</span>
-          <span className="text-[10px] text-slate-500">v1.0</span>
+      {/* Chat */}
+      <div className="h-[35vh] md:h-full w-full md:w-80 flex flex-col bg-panel border-t md:border-t-0 md:border-l border-white/5 z-40">
+        <div className="px-3.5 py-3 border-b border-white/5 flex justify-between items-center">
+          <span className="text-xs font-semibold uppercase tracking-wider text-fg-muted">Live chat</span>
+          <span className="text-[10px] text-fg-faint">v1.0</span>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-2 md:p-3 space-y-2 min-h-0 scrollbar-thin scrollbar-thumb-slate-700">
-          {messages.map((msg, idx) => (
-            <div key={idx} className="text-xs bg-slate-800/50 p-1.5 md:p-2 rounded animate-fade-in break-words">
-              <span className="font-bold text-blue-400">{msg.user}:</span> &nbsp;
-              <span className="text-slate-200">{msg.text}</span>
-            </div>
-          ))}
+        <div className="flex-1 overflow-y-auto p-3 space-y-2 min-h-0 scrollbar-thin">
+          {messages.map((msg) =>
+            msg.isDonation ? (
+              <div
+                key={msg.id}
+                className="flex items-center gap-2 bg-brand/10 border border-brand/30 rounded-lg px-2.5 py-2 animate-fade-in"
+              >
+                <Coins size={16} className="text-brand-light shrink-0" />
+                <span className="text-[13px] break-words">
+                  <span className="text-brand-light font-semibold">{msg.user}</span>{' '}
+                  <span className="text-fg-muted">donated</span>{' '}
+                  <span className="text-fg font-semibold">{msg.amount} ₽</span>
+                </span>
+              </div>
+            ) : (
+              <div key={msg.id} className="text-[13px] break-words animate-fade-in leading-snug">
+                <span className="font-semibold text-sideb-light">{msg.user}</span>{' '}
+                <span className="text-fg/90">{msg.text}</span>
+              </div>
+            )
+          )}
           <div ref={chatEndRef} />
         </div>
 
         {uiRole === 'viewer' && (
-          <div className="p-2 flex justify-center gap-4 border-t border-slate-800 bg-slate-900">
+          <div className="px-3 py-2 flex justify-center gap-4 border-t border-white/5">
             <button onClick={() => sendReaction('heart')} className="text-xl hover:scale-125 transition-transform">
               ❤️
             </button>
@@ -509,45 +536,23 @@ export default function DebateRoom() {
           </div>
         )}
 
-        <form onSubmit={sendMessage} className="p-2 md:p-3 flex gap-2 border-t border-slate-800 bg-slate-900">
+        <form onSubmit={sendMessage} className="p-3 flex items-center gap-2 border-t border-white/5">
           <input
-            className="flex-1 bg-slate-800 border border-slate-700 rounded-full px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm text-white focus:outline-none focus:border-blue-500 placeholder-slate-500"
-            placeholder="Send a message..."
+            className="flex-1 bg-panel-2 border border-white/10 rounded-xl px-3.5 py-2 text-[13px] text-fg focus:outline-none focus:border-brand placeholder-fg-faint"
+            placeholder="Say something…"
             value={input}
             onChange={(e) => setInput(e.target.value)}
           />
-          <button type="button" onClick={sendDonation} className="text-xl hover:scale-110 transition-transform">
-            💰
+          <button
+            type="button"
+            onClick={sendDonation}
+            aria-label="Send donation"
+            className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-brand text-brand-ink glow-brand hover:scale-105 transition-transform shrink-0"
+          >
+            <Coins size={18} />
           </button>
         </form>
       </div>
-
-      <style jsx global>{`
-        @keyframes float-up {
-          0% { transform: translateY(0); opacity: 1; }
-          100% { transform: translateY(-100px); opacity: 0; }
-        }
-        @keyframes fade-in {
-          from { opacity: 0; transform: translateY(5px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        .animate-float-up {
-          animation: float-up 1.5s ease-out forwards;
-        }
-        .animate-fade-in {
-          animation: fade-in 0.2s ease-out forwards;
-        }
-        .scrollbar-thin::-webkit-scrollbar {
-          width: 6px;
-        }
-        .scrollbar-thin::-webkit-scrollbar-track {
-          background: transparent;
-        }
-        .scrollbar-thin::-webkit-scrollbar-thumb {
-          background-color: #334155;
-          border-radius: 20px;
-        }
-      `}</style>
     </div>
   );
 }
