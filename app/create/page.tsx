@@ -22,6 +22,10 @@ function getOrCreateSessionIdentity(roomId: string): string {
   return id;
 }
 
+function formatDuration(s: number): string {
+  return s < 60 ? `${s} sec` : `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
 export default function CreateRoom() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
@@ -29,7 +33,7 @@ export default function CreateRoom() {
   const [labelA, setLabelA] = useState('');
   const [labelB, setLabelB] = useState('');
   const [roundsCount, setRoundsCount] = useState(2);
-  const [roundDuration, setRoundDuration] = useState(45);
+  const [roundDuration, setRoundDuration] = useState(90);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -143,31 +147,51 @@ export default function CreateRoom() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className={labelCls}>Rounds</label>
-              <select
-                value={roundsCount}
-                onChange={(e) => setRoundsCount(Number(e.target.value))}
-                className={`${inputCls} appearance-none cursor-pointer`}
+          <div>
+            <label className={labelCls}>Rounds</label>
+            <div className="flex items-center gap-3 bg-panel border border-white/10 rounded-xl px-3 py-2">
+              <button
+                type="button"
+                onClick={() => setRoundsCount((n) => Math.max(1, n - 1))}
+                disabled={roundsCount <= 1}
+                aria-label="Fewer rounds"
+                className="w-9 h-9 rounded-lg bg-panel-2 border border-white/10 text-fg text-lg leading-none hover:border-brand/50 disabled:opacity-40 disabled:hover:border-white/10 transition-colors flex items-center justify-center"
               >
-                <option value={2}>2 rounds</option>
-                <option value={4}>4 rounds</option>
-                <option value={6}>6 rounds</option>
-              </select>
+                −
+              </button>
+              <div className="flex-1 text-center">
+                <span className="text-xl font-semibold tabular-nums">{roundsCount}</span>
+                <span className="text-fg-muted text-sm ml-1.5">{roundsCount === 1 ? 'round' : 'rounds'}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setRoundsCount((n) => Math.min(12, n + 1))}
+                disabled={roundsCount >= 12}
+                aria-label="More rounds"
+                className="w-9 h-9 rounded-lg bg-panel-2 border border-white/10 text-fg text-lg leading-none hover:border-brand/50 disabled:opacity-40 disabled:hover:border-white/10 transition-colors flex items-center justify-center"
+              >
+                +
+              </button>
             </div>
-            <div>
-              <label className={labelCls}>Round time</label>
-              <select
-                value={roundDuration}
-                onChange={(e) => setRoundDuration(Number(e.target.value))}
-                className={`${inputCls} appearance-none cursor-pointer`}
-              >
-                <option value={30}>30 sec</option>
-                <option value={45}>45 sec</option>
-                <option value={60}>60 sec</option>
-                <option value={90}>90 sec</option>
-              </select>
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[11px] font-medium uppercase tracking-wider text-fg-muted">Round time</span>
+              <span className="text-sm font-semibold text-brand-light tabular-nums">{formatDuration(roundDuration)}</span>
+            </div>
+            <input
+              type="range"
+              min={45}
+              max={180}
+              step={15}
+              value={roundDuration}
+              onChange={(e) => setRoundDuration(Number(e.target.value))}
+              className="w-full accent-brand cursor-pointer"
+            />
+            <div className="flex justify-between text-[11px] text-fg-faint mt-1.5">
+              <span>45 sec</span>
+              <span>3:00</span>
             </div>
           </div>
 
