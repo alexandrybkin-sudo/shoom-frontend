@@ -152,8 +152,8 @@ export default function CreateRoom() {
             <div className="flex items-center gap-3 bg-panel border border-white/10 rounded-xl px-3 py-2">
               <button
                 type="button"
-                onClick={() => setRoundsCount((n) => Math.max(1, n - 1))}
-                disabled={roundsCount <= 1}
+                onClick={() => setRoundsCount((n) => Math.max(2, n - 2))}
+                disabled={roundsCount <= 2}
                 aria-label="Fewer rounds"
                 className="w-9 h-9 rounded-lg bg-panel-2 border border-white/10 text-fg text-lg leading-none hover:border-brand/50 disabled:opacity-40 disabled:hover:border-white/10 transition-colors flex items-center justify-center"
               >
@@ -161,11 +161,11 @@ export default function CreateRoom() {
               </button>
               <div className="flex-1 text-center">
                 <span className="text-xl font-semibold tabular-nums">{roundsCount}</span>
-                <span className="text-fg-muted text-sm ml-1.5">{roundsCount === 1 ? 'round' : 'rounds'}</span>
+                <span className="text-fg-muted text-sm ml-1.5">rounds</span>
               </div>
               <button
                 type="button"
-                onClick={() => setRoundsCount((n) => Math.min(12, n + 1))}
+                onClick={() => setRoundsCount((n) => Math.min(12, n + 2))}
                 disabled={roundsCount >= 12}
                 aria-label="More rounds"
                 className="w-9 h-9 rounded-lg bg-panel-2 border border-white/10 text-fg text-lg leading-none hover:border-brand/50 disabled:opacity-40 disabled:hover:border-white/10 transition-colors flex items-center justify-center"
