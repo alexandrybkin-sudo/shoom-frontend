@@ -46,8 +46,13 @@ body {
   from { opacity: 0; transform: translateY(5px); }
   to { opacity: 1; transform: translateY(0); }
 }
+@keyframes knight-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
 .animate-float-up { animation: float-up 1.6s ease-out forwards; }
 .animate-fade-in { animation: fade-in 0.2s ease-out forwards; }
+.animate-knight-bob { animation: knight-bob 1.8s ease-in-out infinite; }
 
 /* subtle scrollbar */
 .scrollbar-thin::-webkit-scrollbar { width: 6px; }

@@ -1,8 +1,66 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Zap, Eye, Plus, Swords, Mic, Flame } from 'lucide-react';
+
+// 🐣 Easter egg: hover the logo for 3s and a tiny knight peeks out from behind it.
+function BrandLogo() {
+  const [out, setOut] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const onEnter = () => {
+    timer.current = setTimeout(() => setOut(true), 3000);
+  };
+  const onLeave = () => {
+    if (timer.current) clearTimeout(timer.current);
+    setOut(false);
+  };
+  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+
+  return (
+    <div className="flex items-center gap-2.5">
+      <div className="relative" onMouseEnter={onEnter} onMouseLeave={onLeave}>
+        {/* the little knight — peeks out from behind the right edge of the logo */}
+        <div
+          aria-hidden
+          className={`pointer-events-none absolute top-1/2 left-full -translate-y-1/2 z-0 transition-all duration-500 ease-out ${
+            out ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-7'
+          }`}
+          style={{ marginLeft: '-18px' }}
+        >
+         <div className={out ? 'animate-knight-bob' : ''}>
+          <svg width="34" height="38" viewBox="0 0 38 42" fill="none" xmlns="http://www.w3.org/2000/svg">
+            {/* plume */}
+            <path d="M19 2 C 24 4, 24 9, 19 12" stroke="#A06BFF" strokeWidth="3" strokeLinecap="round" />
+            {/* sword */}
+            <rect x="29.5" y="3" width="2.4" height="17" rx="1.2" fill="#E8EAF0" transform="rotate(22 30.7 11.5)" />
+            <rect x="26" y="15.5" width="8" height="2.6" rx="1.3" fill="#A06BFF" transform="rotate(22 30 16.8)" />
+            {/* helmet */}
+            <rect x="11" y="9" width="16" height="19" rx="7.5" fill="#C7CBD4" />
+            <rect x="11" y="9" width="16" height="19" rx="7.5" fill="url(#kg)" fillOpacity="0.25" />
+            {/* visor slits */}
+            <rect x="14.5" y="15" width="9" height="2.8" rx="1.4" fill="#2A2F3A" />
+            <rect x="14.5" y="19.5" width="9" height="2.2" rx="1.1" fill="#2A2F3A" />
+            <defs>
+              <linearGradient id="kg" x1="11" y1="9" x2="27" y2="28" gradientUnits="userSpaceOnUse">
+                <stop stopColor="#ffffff" />
+                <stop offset="1" stopColor="#8a8f9c" />
+              </linearGradient>
+            </defs>
+          </svg>
+         </div>
+        </div>
+
+        {/* logo on top, hides the knight's lower half */}
+        <div className="relative z-10 w-8 h-8 bg-brand rounded-xl flex items-center justify-center glow-brand">
+          <Zap className="text-brand-ink fill-brand-ink" size={18} />
+        </div>
+      </div>
+      <span className="text-xl font-bold tracking-tight">Shoom</span>
+    </div>
+  );
+}
 
 interface Room {
   id: string;
@@ -126,12 +184,7 @@ export default function Lobby() {
     <div className="min-h-screen bg-ink text-fg font-sans selection:bg-brand/30 overflow-x-hidden">
       {/* Navbar */}
       <div className="fixed top-0 w-full px-4 md:px-6 py-4 flex justify-between items-center bg-ink/70 backdrop-blur-xl z-50 border-b border-white/5">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 bg-brand rounded-xl flex items-center justify-center glow-brand">
-            <Zap className="text-brand-ink fill-brand-ink" size={18} />
-          </div>
-          <span className="text-xl font-bold tracking-tight">Shoom</span>
-        </div>
+        <BrandLogo />
         <div className="flex items-center gap-5">
           <a href="#" className="text-sm text-fg-muted hover:text-fg transition-colors">How it works</a>
           <a href="#" className="text-sm font-medium text-fg border border-white/15 px-3.5 py-1.5 rounded-lg hover:border-white/30 transition-colors">Sign in</a>
