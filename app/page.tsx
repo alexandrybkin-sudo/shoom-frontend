@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { Zap, Eye, Plus, Swords, Mic, Flame } from 'lucide-react';
+import { Zap, Eye, Plus, Swords, Mic, Flame, LogOut } from 'lucide-react';
+import { useAuth } from './providers';
 
 // 🐣 Easter egg: hover the logo for 3s and a tiny knight peeks out from behind it.
 function BrandLogo() {
@@ -148,7 +149,10 @@ function BattleCard({ room, onClick }: { room: Room; onClick: () => void }) {
 
 export default function Lobby() {
   const router = useRouter();
+  const { user, loading, logout } = useAuth();
   const [rooms, setRooms] = useState<Room[]>([]);
+
+  const goCreate = () => router.push(user ? '/create' : '/login');
 
   useEffect(() => {
     const fetchRooms = async () => {
@@ -185,9 +189,36 @@ export default function Lobby() {
       {/* Navbar */}
       <div className="fixed top-0 w-full px-4 md:px-6 py-4 flex justify-between items-center bg-ink/70 backdrop-blur-xl z-50 border-b border-white/5">
         <BrandLogo />
-        <div className="flex items-center gap-5">
-          <a href="#" className="text-sm text-fg-muted hover:text-fg transition-colors">How it works</a>
-          <a href="#" className="text-sm font-medium text-fg border border-white/15 px-3.5 py-1.5 rounded-lg hover:border-white/30 transition-colors">Sign in</a>
+        <div className="flex items-center gap-4">
+          {loading ? null : user ? (
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                {user.avatar_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={user.avatar_url} alt="" className="w-7 h-7 rounded-full object-cover" />
+                ) : (
+                  <div className="w-7 h-7 rounded-full bg-brand/20 text-brand-light flex items-center justify-center text-xs font-semibold">
+                    {user.display_name.charAt(0).toUpperCase()}
+                  </div>
+                )}
+                <span className="text-sm font-medium max-w-[120px] truncate">{user.display_name}</span>
+              </div>
+              <button
+                onClick={logout}
+                aria-label="Log out"
+                className="text-fg-muted hover:text-fg transition-colors"
+              >
+                <LogOut size={17} />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => router.push('/login')}
+              className="text-sm font-medium text-fg border border-white/15 px-3.5 py-1.5 rounded-lg hover:border-white/30 transition-colors"
+            >
+              Sign in
+            </button>
+          )}
         </div>
       </div>
 
@@ -208,7 +239,7 @@ export default function Lobby() {
             What&apos;s the debate?
           </span>
           <button
-            onClick={() => router.push('/create')}
+            onClick={goCreate}
             className="inline-flex items-center gap-2 bg-brand text-brand-ink px-5 py-3 rounded-xl font-semibold text-sm md:text-base transition-all hover:scale-[1.03] glow-brand"
           >
             Create battle
@@ -260,7 +291,7 @@ export default function Lobby() {
               </div>
               <p className="text-fg-muted">No battles yet. Be the first to start one.</p>
               <button
-                onClick={() => router.push('/create')}
+                onClick={goCreate}
                 className="mt-5 inline-flex items-center gap-2 bg-brand text-brand-ink px-5 py-2.5 rounded-xl font-semibold text-sm transition-all hover:scale-[1.03] glow-brand"
               >
                 Create battle <Plus size={16} />

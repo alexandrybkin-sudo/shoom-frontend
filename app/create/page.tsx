@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Plus } from 'lucide-react';
+import { useAuth } from '../providers';
 
 function getApiUrl() {
   if (typeof window === 'undefined') return 'http://localhost:3001';
@@ -23,6 +24,7 @@ function getOrCreateSessionIdentity(roomId: string): string {
 
 export default function CreateRoom() {
   const router = useRouter();
+  const { user, loading: authLoading } = useAuth();
   const [topic, setTopic] = useState('');
   const [labelA, setLabelA] = useState('');
   const [labelB, setLabelB] = useState('');
@@ -30,6 +32,10 @@ export default function CreateRoom() {
   const [roundDuration, setRoundDuration] = useState(45);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!authLoading && !user) router.replace('/login');
+  }, [authLoading, user, router]);
 
   const handleCreate = async () => {
     if (!topic.trim()) {
