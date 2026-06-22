@@ -43,6 +43,19 @@ interface ServerState {
   topic?: string;
   labelA?: string;
   labelB?: string;
+  matchId?: string | null;
+  voteWindowEndsAt?: number | null;
+  voteShareA?: number;
+  voteShareB?: number;
+  voteVoters?: number;
+  verdict?: {
+    winnerSide: 'A' | 'B' | 'tie';
+    finalShareA: number;
+    finalShareB: number;
+    swingWinner: 'A' | 'B' | 'none';
+    swingPct: number;
+    totalVoters: number;
+  } | null;
 }
 
 function getApiUrl() {
@@ -155,45 +168,59 @@ function DualSpeakerView({
   );
 }
 
-function VictoryOverlay({
+function VerdictOverlay({
   phase,
-  onVote,
   isVisible,
+  verdict,
   labelA,
   labelB,
 }: {
   phase: Phase;
-  onVote: (team: 'A' | 'B') => void;
   isVisible: boolean;
+  verdict: ServerState['verdict'];
   labelA: string;
   labelB: string;
 }) {
   if (!isVisible || phase !== 'finished') return null;
 
+  const pa = Math.round((verdict?.finalShareA ?? 0.5) * 100);
+  const pb = 100 - pa;
+  const tie = !verdict || verdict.winnerSide === 'tie';
+  const winnerLabel = tie ? 'Tie' : verdict!.winnerSide === 'A' ? labelA : labelB;
+  const winnerColor = tie ? 'text-fg' : verdict!.winnerSide === 'A' ? 'text-sidea-light' : 'text-sideb-light';
+  const swingLabel =
+    verdict && verdict.swingWinner !== 'none'
+      ? verdict.swingWinner === 'A' ? labelA : labelB
+      : null;
+
   return (
-    <div className="absolute inset-0 bg-ink/92 flex items-center justify-center z-50 backdrop-blur-sm animate-fade-in">
-      <div className="text-center px-4">
+    <div className="absolute inset-0 bg-ink/92 flex items-center justify-center z-50 backdrop-blur-sm animate-fade-in px-4">
+      <div className="text-center w-full max-w-sm">
         <p className="text-[11px] text-brand-light uppercase tracking-[0.18em] mb-3 font-medium">
-          The crowd decides
+          The crowd has decided
         </p>
-        <h2 className="text-3xl md:text-5xl font-bold tracking-tight mb-10">
-          Who won?
+        <h2 className={`text-3xl md:text-5xl font-bold tracking-tight mb-1 ${winnerColor}`}>
+          {winnerLabel}
         </h2>
-        <div className="flex flex-col md:flex-row items-center gap-4 md:gap-6">
-          <button
-            onClick={() => onVote('A')}
-            className="w-44 px-6 py-4 bg-sidea/15 border-2 border-sidea text-sidea-light font-bold text-lg uppercase tracking-wide rounded-2xl transition-all hover:scale-105 active:scale-95 glow-sidea"
-          >
-            {labelA}
-          </button>
-          <div className="text-xl font-bold text-fg-faint uppercase">vs</div>
-          <button
-            onClick={() => onVote('B')}
-            className="w-44 px-6 py-4 bg-sideb/15 border-2 border-sideb text-sideb-light font-bold text-lg uppercase tracking-wide rounded-2xl transition-all hover:scale-105 active:scale-95 glow-sideb"
-          >
-            {labelB}
-          </button>
+        <p className="text-fg-muted text-sm mb-6">{tie ? 'the room was split' : 'wins by volume of the room'}</p>
+
+        <div className="flex items-center justify-between text-xs font-semibold mb-1.5">
+          <span className="text-sidea-light">{labelA} {pa}%</span>
+          <span className="text-sideb-light">{labelB} {pb}%</span>
         </div>
+        <div className="h-3 rounded-full overflow-hidden bg-sideb">
+          <div className="h-full bg-sidea" style={{ width: `${pa}%` }} />
+        </div>
+
+        {swingLabel && (
+          <div className="mt-6 inline-flex items-center gap-2 bg-rage/[0.12] border border-rage/30 text-rage-light text-sm font-medium px-4 py-2 rounded-xl">
+            🔥 Swing award: <span className="font-semibold">{swingLabel}</span> +{Math.round(verdict!.swingPct * 100)}%
+          </div>
+        )}
+
+        <p className="mt-6 text-fg-faint text-xs">
+          {verdict?.totalVoters ?? 0} voters · last window counts double
+        </p>
       </div>
     </div>
   );
@@ -208,6 +235,8 @@ export default function DebateRoom() {
   const [floatingEmojis, setFloatingEmojis] = useState<FloatingEmoji[]>([]);
   const [token, setToken] = useState('');
   const [showVoteModal, setShowVoteModal] = useState(false);
+  const [myVote, setMyVote] = useState<'A' | 'B' | null>(null);
+  const [voteError, setVoteError] = useState('');
   const [serverState, setServerState] = useState<ServerState>({
     phase: 'waiting',
     currentRound: 0,
@@ -349,10 +378,36 @@ export default function DebateRoom() {
     setInput('');
   };
 
-  const handleVote = (team: 'A' | 'B') => {
-    sendChatMessage(`/vote ${team}`);
-    setShowVoteModal(false);
+  // Per-window vote: POST to the match; backend builds the live persuasion bar.
+  const castVote = async (side: 'A' | 'B') => {
+    const matchId = serverState.matchId;
+    if (!matchId) return;
+    setMyVote(side); // optimistic
+    try {
+      const res = await fetch(`${getApiUrl()}/api/matches/${matchId}/vote`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ side }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setMyVote(null);
+        if (res.status === 401) setVoteError('Sign in to vote');
+        else setVoteError(data.error || 'Could not vote');
+        return;
+      }
+      setVoteError('');
+    } catch {
+      setMyVote(null);
+    }
   };
+
+  // Reset my pick when a new voting window opens.
+  useEffect(() => {
+    setMyVote(null);
+    setVoteError('');
+  }, [serverState.voteWindowEndsAt]);
 
   const sendReaction = (type: 'heart' | 'poop') =>
     socketRef.current?.emit('send_reaction', { type });
@@ -483,10 +538,65 @@ export default function DebateRoom() {
               </div>
             ))}
 
-            <VictoryOverlay
+            {/* Live persuasion bar + per-window voting */}
+            {(serverState.phase === 'round' || serverState.phase === 'rageRound') && (
+              <div className="absolute bottom-3 left-1/2 -translate-x-1/2 w-[min(92%,440px)] z-20">
+                <div className="bg-black/55 backdrop-blur rounded-xl p-2.5">
+                  <div className="flex items-center justify-between text-[11px] font-semibold mb-1.5">
+                    <span className="text-sidea-light">{labelA} {Math.round((serverState.voteShareA ?? 0.5) * 100)}%</span>
+                    <span className="text-fg-faint text-[10px]">persuasion</span>
+                    <span className="text-sideb-light">{Math.round((serverState.voteShareB ?? 0.5) * 100)}% {labelB}</span>
+                  </div>
+                  <div className="h-2.5 rounded-full overflow-hidden bg-sideb">
+                    <div
+                      className="h-full bg-sidea transition-all duration-700 ease-out"
+                      style={{ width: `${Math.round((serverState.voteShareA ?? 0.5) * 100)}%` }}
+                    />
+                  </div>
+
+                  {uiRole === 'viewer' && (
+                    <>
+                      <div className="mt-2 flex items-center gap-2">
+                        <button
+                          onClick={() => castVote('A')}
+                          className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                            myVote === 'A'
+                              ? 'bg-sidea text-brand-ink glow-sidea'
+                              : 'bg-sidea/15 text-sidea-light border border-sidea/30 hover:bg-sidea/25'
+                          }`}
+                        >
+                          {labelA}
+                        </button>
+                        <button
+                          onClick={() => castVote('B')}
+                          className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                            myVote === 'B'
+                              ? 'bg-sideb text-brand-ink glow-sideb'
+                              : 'bg-sideb/15 text-sideb-light border border-sideb/30 hover:bg-sideb/25'
+                          }`}
+                        >
+                          {labelB}
+                        </button>
+                      </div>
+                      <div className="text-center text-[10px] mt-1 h-3.5">
+                        {voteError ? (
+                          <span className="text-rage-light">{voteError}</span>
+                        ) : serverState.voteWindowEndsAt ? (
+                          <span className="text-fg-faint">
+                            next window in {Math.max(0, Math.ceil((serverState.voteWindowEndsAt - Date.now()) / 1000))}s
+                          </span>
+                        ) : null}
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <VerdictOverlay
               phase={serverState.phase}
               isVisible={showVoteModal}
-              onVote={handleVote}
+              verdict={serverState.verdict}
               labelA={labelA}
               labelB={labelB}
             />
