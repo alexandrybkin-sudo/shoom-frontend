@@ -11,6 +11,7 @@ import {
 } from '@livekit/components-react';
 import '@livekit/components-styles';
 import { Track, RoomOptions, VideoPresets } from 'livekit-client';
+import { useT, LanguageSwitcher } from '../../i18n';
 
 type Phase = 'waiting' | 'round' | 'rageRound' | 'finished';
 type Role = 'viewer' | 'admin' | 'debater';
@@ -86,6 +87,7 @@ function SpeakerTile({
   label: string;
   active: boolean;
 }) {
+  const { t } = useT();
   const isA = side === 'A';
   const ring = active
     ? isA
@@ -107,7 +109,7 @@ function SpeakerTile({
         <div className="flex flex-col items-center justify-center h-full bg-panel-2 text-center p-4">
           <div className={`animate-pulse ${dotColor} mb-2 text-lg`}>●</div>
           <span className="text-fg-faint text-sm font-medium">
-            Waiting {label}…
+            {t('room.waitingSide', { label })}
           </span>
         </div>
       )}
@@ -117,11 +119,11 @@ function SpeakerTile({
         <div className="absolute top-2.5 left-2.5">
           {active ? (
             <span className={`inline-flex items-center gap-1.5 ${tagBg} text-[10px] font-bold px-2 py-1 rounded-md`}>
-              <Mic size={12} /> Speaking
+              <Mic size={12} /> {t('room.speaking')}
             </span>
           ) : (
             <span className="inline-flex items-center gap-1.5 bg-black/55 text-fg-muted text-[10px] font-medium px-2 py-1 rounded-md">
-              <MicOff size={12} /> Muted
+              <MicOff size={12} /> {t('room.muted')}
             </span>
           )}
         </div>
@@ -181,12 +183,13 @@ function VerdictOverlay({
   labelA: string;
   labelB: string;
 }) {
+  const { t } = useT();
   if (!isVisible || phase !== 'finished') return null;
 
   const pa = Math.round((verdict?.finalShareA ?? 0.5) * 100);
   const pb = 100 - pa;
   const tie = !verdict || verdict.winnerSide === 'tie';
-  const winnerLabel = tie ? 'Tie' : verdict!.winnerSide === 'A' ? labelA : labelB;
+  const winnerLabel = tie ? t('room.tie') : verdict!.winnerSide === 'A' ? labelA : labelB;
   const winnerColor = tie ? 'text-fg' : verdict!.winnerSide === 'A' ? 'text-sidea-light' : 'text-sideb-light';
   const swingLabel =
     verdict && verdict.swingWinner !== 'none'
@@ -197,12 +200,12 @@ function VerdictOverlay({
     <div className="absolute inset-0 bg-ink/92 flex items-center justify-center z-50 backdrop-blur-sm animate-fade-in px-4">
       <div className="text-center w-full max-w-sm">
         <p className="text-[11px] text-brand-light uppercase tracking-[0.18em] mb-3 font-medium">
-          The crowd has decided
+          {t('room.verdictEyebrow')}
         </p>
         <h2 className={`text-3xl md:text-5xl font-bold tracking-tight mb-1 ${winnerColor}`}>
           {winnerLabel}
         </h2>
-        <p className="text-fg-muted text-sm mb-6">{tie ? 'the room was split' : 'wins by volume of the room'}</p>
+        <p className="text-fg-muted text-sm mb-6">{tie ? t('room.roomSplit') : t('room.winsByVolume')}</p>
 
         <div className="flex items-center justify-between text-xs font-semibold mb-1.5">
           <span className="text-sidea-light">{labelA} {pa}%</span>
@@ -214,12 +217,12 @@ function VerdictOverlay({
 
         {swingLabel && (
           <div className="mt-6 inline-flex items-center gap-2 bg-rage/[0.12] border border-rage/30 text-rage-light text-sm font-medium px-4 py-2 rounded-xl">
-            🔥 Swing award: <span className="font-semibold">{swingLabel}</span> +{Math.round(verdict!.swingPct * 100)}%
+            🔥 {t('room.swingAward')}: <span className="font-semibold">{swingLabel}</span> +{Math.round(verdict!.swingPct * 100)}%
           </div>
         )}
 
         <p className="mt-6 text-fg-faint text-xs">
-          {verdict?.totalVoters ?? 0} voters · last window counts double
+          {t('room.votersNote', { n: verdict?.totalVoters ?? 0 })}
         </p>
       </div>
     </div>
@@ -227,6 +230,7 @@ function VerdictOverlay({
 }
 
 export default function DebateRoom() {
+  const { t } = useT();
   const [uiRole, setUiRole] = useState<Role>('viewer');
   const [lkRole, setLkRole] = useState<'viewer' | 'debater'>('viewer');
   const [mySlot, setMySlot] = useState<'A' | 'B' | null>(null);
@@ -393,8 +397,8 @@ export default function DebateRoom() {
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         setMyVote(null);
-        if (res.status === 401) setVoteError('Sign in to vote');
-        else setVoteError(data.error || 'Could not vote');
+        if (res.status === 401) setVoteError(t('room.signInToVote'));
+        else setVoteError(data.error || t('room.couldNotVote'));
         return;
       }
       setVoteError('');
@@ -434,7 +438,7 @@ export default function DebateRoom() {
       <div className="flex items-center justify-center h-screen bg-ink text-fg">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand mx-auto mb-4" />
-          <p className="text-fg-muted">Loading room…</p>
+          <p className="text-fg-muted">{t('room.loading')}</p>
         </div>
       </div>
     );
@@ -445,17 +449,20 @@ export default function DebateRoom() {
         {/* Top bar: topic + sides + viewers */}
         <div className="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-white/5 bg-ink/80 backdrop-blur z-10">
           <div className="min-w-0">
-            <div className="text-sm font-semibold truncate">{serverState.topic || 'Debate'}</div>
+            <div className="text-sm font-semibold truncate">{serverState.topic || t('room.debate')}</div>
             <div className="flex items-center gap-2 mt-0.5">
               <span className="text-[11px] font-semibold text-sidea-light">{labelA}</span>
               <span className="text-[10px] font-bold text-fg-faint">VS</span>
               <span className="text-[11px] font-semibold text-sideb-light">{labelB}</span>
             </div>
           </div>
-          <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs text-fg-muted">
-            <Eye size={15} />
-            {serverState.viewersCount}
-          </span>
+          <div className="flex items-center gap-3">
+            <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs text-fg-muted">
+              <Eye size={15} />
+              {serverState.viewersCount}
+            </span>
+            <LanguageSwitcher />
+          </div>
         </div>
 
         <LiveKitRoom
@@ -479,9 +486,9 @@ export default function DebateRoom() {
             {/* Phase + timer HUD */}
             <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 inline-flex items-center gap-2.5 bg-brand/15 border border-brand/40 text-brand-light text-xs font-semibold px-3.5 py-1.5 rounded-xl backdrop-blur glow-brand">
               {serverState.phase === 'rageRound' ? (
-                <><Flame size={14} /> Rage round</>
+                <><Flame size={14} /> {t('room.rageRound')}</>
               ) : serverState.phase === 'round' ? (
-                <><Mic size={14} /> Round {serverState.currentRound} / {serverState.roundsTotal}</>
+                <><Mic size={14} /> {t('room.round', { n: serverState.currentRound, m: serverState.roundsTotal })}</>
               ) : (
                 <span className="uppercase">{serverState.phase}</span>
               )}
@@ -493,7 +500,7 @@ export default function DebateRoom() {
             {serverState.phase === 'rageRound' && (
               <div className="absolute top-16 left-1/2 -translate-x-1/2 flex flex-col items-center z-30 animate-pulse">
                 <div className="text-4xl md:text-5xl font-bold text-rage uppercase tracking-wide drop-shadow-[0_0_18px_rgba(239,159,39,0.7)]">
-                  Rage round
+                  {t('room.rageRound')}
                 </div>
               </div>
             )}
@@ -522,7 +529,7 @@ export default function DebateRoom() {
                   onClick={() => socketRef.current?.emit('request_extra_rounds')}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-black/70 border border-white/15 hover:border-white/30 text-fg text-xs font-medium rounded-lg transition-all"
                 >
-                  <Plus size={14} /> 2 rounds
+                  <Plus size={14} /> {t('room.extraRounds')}
                 </button>
               </div>
             )}
@@ -544,7 +551,7 @@ export default function DebateRoom() {
                 <div className="bg-black/55 backdrop-blur rounded-xl p-2.5">
                   <div className="flex items-center justify-between text-[11px] font-semibold mb-1.5">
                     <span className="text-sidea-light">{labelA} {Math.round((serverState.voteShareA ?? 0.5) * 100)}%</span>
-                    <span className="text-fg-faint text-[10px]">persuasion</span>
+                    <span className="text-fg-faint text-[10px]">{t('room.persuasion')}</span>
                     <span className="text-sideb-light">{Math.round((serverState.voteShareB ?? 0.5) * 100)}% {labelB}</span>
                   </div>
                   <div className="h-2.5 rounded-full overflow-hidden bg-sideb">
@@ -583,7 +590,7 @@ export default function DebateRoom() {
                           <span className="text-rage-light">{voteError}</span>
                         ) : serverState.voteWindowEndsAt ? (
                           <span className="text-fg-faint">
-                            next window in {Math.max(0, Math.ceil((serverState.voteWindowEndsAt - Date.now()) / 1000))}s
+                            {t('room.nextWindow', { n: Math.max(0, Math.ceil((serverState.voteWindowEndsAt - Date.now()) / 1000)) })}
                           </span>
                         ) : null}
                       </div>
@@ -607,7 +614,7 @@ export default function DebateRoom() {
       {/* Chat */}
       <div className="h-[35vh] md:h-full w-full md:w-80 flex flex-col bg-panel border-t md:border-t-0 md:border-l border-white/5 z-40">
         <div className="px-3.5 py-3 border-b border-white/5 flex justify-between items-center">
-          <span className="text-xs font-semibold uppercase tracking-wider text-fg-muted">Live chat</span>
+          <span className="text-xs font-semibold uppercase tracking-wider text-fg-muted">{t('room.liveChat')}</span>
           <span className="text-[10px] text-fg-faint">v1.0</span>
         </div>
 
@@ -621,7 +628,7 @@ export default function DebateRoom() {
                 <Coins size={16} className="text-brand-light shrink-0" />
                 <span className="text-[13px] break-words">
                   <span className="text-brand-light font-semibold">{msg.user}</span>{' '}
-                  <span className="text-fg-muted">donated</span>{' '}
+                  <span className="text-fg-muted">{t('room.donated')}</span>{' '}
                   <span className="text-fg font-semibold">{msg.amount} ₽</span>
                 </span>
               </div>
@@ -649,7 +656,7 @@ export default function DebateRoom() {
         <form onSubmit={sendMessage} className="p-3 flex items-center gap-2 border-t border-white/5">
           <input
             className="flex-1 bg-panel-2 border border-white/10 rounded-xl px-3.5 py-2 text-[13px] text-fg focus:outline-none focus:border-brand placeholder-fg-faint"
-            placeholder="Say something…"
+            placeholder={t('room.chatPlaceholder')}
             value={input}
             onChange={(e) => setInput(e.target.value)}
           />

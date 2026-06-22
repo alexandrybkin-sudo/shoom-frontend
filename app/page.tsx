@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Zap, Eye, Plus, Swords, Mic, Flame, LogOut } from 'lucide-react';
 import { useAuth } from './providers';
+import { useT, LanguageSwitcher } from './i18n';
 
 // 🐣 Easter egg: hover the logo for 3s and a tiny knight peeks out from behind it.
 function BrandLogo() {
@@ -79,17 +80,18 @@ interface Room {
 function phaseLabel(phase: string) {
   switch (phase) {
     case 'rageRound':
-      return { text: 'Rage round', icon: Flame, rage: true };
+      return { key: 'card.rageRound', icon: Flame, rage: true };
     case 'round':
-      return { text: 'Live round', icon: Mic, rage: false };
+      return { key: 'card.liveRound', icon: Mic, rage: false };
     case 'finished':
-      return { text: 'Voting', icon: Mic, rage: false };
+      return { key: 'card.voting', icon: Mic, rage: false };
     default:
-      return { text: 'Starting', icon: Mic, rage: false };
+      return { key: 'card.starting', icon: Mic, rage: false };
   }
 }
 
 function BattleCard({ room, onClick }: { room: Room; onClick: () => void }) {
+  const { t } = useT();
   const status = phaseLabel(room.phase);
   const StatusIcon = status.icon;
 
@@ -101,7 +103,7 @@ function BattleCard({ room, onClick }: { room: Room; onClick: () => void }) {
       <div className="flex items-center justify-between mb-3.5">
         {room.isOpen ? (
           <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-brand-light bg-brand/[0.12] px-2.5 py-1 rounded-md">
-            Open challenge
+            {t('card.openChallenge')}
           </span>
         ) : (
           <span
@@ -112,7 +114,7 @@ function BattleCard({ room, onClick }: { room: Room; onClick: () => void }) {
             }`}
           >
             <StatusIcon size={13} />
-            {status.text}
+            {t(status.key)}
           </span>
         )}
         <span className="inline-flex items-center gap-1.5 text-xs text-fg-muted">
@@ -127,9 +129,9 @@ function BattleCard({ room, onClick }: { room: Room; onClick: () => void }) {
 
       {room.isOpen ? (
         <div className="flex items-center justify-between gap-3">
-          <span className="text-sm text-fg-faint">Waiting for an opponent</span>
+          <span className="text-sm text-fg-faint">{t('card.waitingOpponent')}</span>
           <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-sm font-semibold text-brand-ink bg-brand px-3.5 py-2 rounded-lg glow-brand">
-            Accept <Swords size={15} />
+            {t('card.accept')} <Swords size={15} />
           </span>
         </div>
       ) : (
@@ -150,6 +152,7 @@ function BattleCard({ room, onClick }: { room: Room; onClick: () => void }) {
 export default function Lobby() {
   const router = useRouter();
   const { user, loading, logout } = useAuth();
+  const { t } = useT();
   const [rooms, setRooms] = useState<Room[]>([]);
 
   const goCreate = () => router.push(user ? '/create' : '/login');
@@ -189,7 +192,8 @@ export default function Lobby() {
       {/* Navbar */}
       <div className="fixed top-0 w-full px-4 md:px-6 py-4 flex justify-between items-center bg-ink/70 backdrop-blur-xl z-50 border-b border-white/5">
         <BrandLogo />
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
+          <LanguageSwitcher />
           {loading ? null : user ? (
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-2">
@@ -205,7 +209,7 @@ export default function Lobby() {
               </div>
               <button
                 onClick={logout}
-                aria-label="Log out"
+                aria-label={t('nav.logout')}
                 className="text-fg-muted hover:text-fg transition-colors"
               >
                 <LogOut size={17} />
@@ -216,7 +220,7 @@ export default function Lobby() {
               onClick={() => router.push('/login')}
               className="text-sm font-medium text-fg border border-white/15 px-3.5 py-1.5 rounded-lg hover:border-white/30 transition-colors"
             >
-              Sign in
+              {t('nav.signIn')}
             </button>
           )}
         </div>
@@ -225,24 +229,24 @@ export default function Lobby() {
       {/* Hero */}
       <div className="relative pt-32 pb-14 px-6 flex flex-col items-center text-center">
         <p className="text-[11px] text-brand-light uppercase tracking-[0.18em] mb-3.5 font-medium">
-          The arena is open
+          {t('lobby.eyebrow')}
         </p>
         <h1 className="text-5xl md:text-7xl font-bold tracking-tight leading-[1.05] mb-4">
-          Settle it <span className="text-brand-light text-glow-brand">live.</span>
+          {t('lobby.titlePre')} <span className="text-brand-light text-glow-brand">{t('lobby.titleAccent')}</span>
         </h1>
         <p className="text-fg-muted text-base md:text-lg max-w-xl mb-9 leading-relaxed">
-          Pick a topic, call out an opponent, and let the crowd decide who wins. Real-time video debates, one round at a time.
+          {t('lobby.subtitle')}
         </p>
 
         <div className="w-full max-w-lg bg-panel border border-white/10 rounded-2xl p-1.5 pl-5 flex items-center gap-2">
           <span className="flex-1 text-left text-sm md:text-base text-fg-faint">
-            What&apos;s the debate?
+            {t('lobby.inputPlaceholder')}
           </span>
           <button
             onClick={goCreate}
             className="inline-flex items-center gap-2 bg-brand text-brand-ink px-5 py-3 rounded-xl font-semibold text-sm md:text-base transition-all hover:scale-[1.03] glow-brand"
           >
-            Create battle
+            {t('lobby.createBattle')}
             <Plus size={18} />
           </button>
         </div>
@@ -254,10 +258,10 @@ export default function Lobby() {
           {liveRooms.length > 0 && (
             <section>
               <div className="flex justify-between items-center mb-5">
-                <h2 className="text-xl md:text-2xl font-semibold">Live now</h2>
+                <h2 className="text-xl md:text-2xl font-semibold">{t('lobby.liveNow')}</h2>
                 <span className="text-[11px] uppercase tracking-wider text-fg-muted flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-brand glow-brand" />
-                  {liveRooms.length} battles online
+                  {t('lobby.battlesOnline', { n: liveRooms.length })}
                 </span>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -271,9 +275,9 @@ export default function Lobby() {
           {openRooms.length > 0 && (
             <section>
               <div className="flex justify-between items-center mb-5">
-                <h2 className="text-xl md:text-2xl font-semibold">Open challenges</h2>
+                <h2 className="text-xl md:text-2xl font-semibold">{t('lobby.openChallenges')}</h2>
                 <span className="text-[11px] uppercase tracking-wider text-fg-muted">
-                  {openRooms.length} waiting
+                  {t('lobby.waiting', { n: openRooms.length })}
                 </span>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -289,12 +293,12 @@ export default function Lobby() {
               <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-panel border border-white/[0.07] mb-4">
                 <Swords className="text-fg-faint" size={24} />
               </div>
-              <p className="text-fg-muted">No battles yet. Be the first to start one.</p>
+              <p className="text-fg-muted">{t('lobby.emptyTitle')}</p>
               <button
                 onClick={goCreate}
                 className="mt-5 inline-flex items-center gap-2 bg-brand text-brand-ink px-5 py-2.5 rounded-xl font-semibold text-sm transition-all hover:scale-[1.03] glow-brand"
               >
-                Create battle <Plus size={16} />
+                {t('lobby.createBattle')} <Plus size={16} />
               </button>
             </div>
           )}
@@ -302,7 +306,7 @@ export default function Lobby() {
       </div>
 
       <div className="py-8 text-center text-fg-faint text-sm border-t border-white/5">
-        Built for glory · Shoom © 2026
+        {t('lobby.footer')}
       </div>
     </div>
   );

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Plus } from 'lucide-react';
 import { useAuth } from '../providers';
+import { useT } from '../i18n';
 
 function getApiUrl() {
   if (typeof window === 'undefined') return 'http://localhost:3001';
@@ -23,12 +24,13 @@ function getOrCreateSessionIdentity(roomId: string): string {
 }
 
 function formatDuration(s: number): string {
-  return s < 60 ? `${s} sec` : `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+  return s < 60 ? `${s}s` : `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
 export default function CreateRoom() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
+  const { t } = useT();
   const [topic, setTopic] = useState('');
   const [labelA, setLabelA] = useState('');
   const [labelB, setLabelB] = useState('');
@@ -43,7 +45,7 @@ export default function CreateRoom() {
 
   const handleCreate = async () => {
     if (!topic.trim()) {
-      setError('Enter a debate topic');
+      setError(t('create.errEmptyTopic'));
       return;
     }
     setLoading(true);
@@ -79,7 +81,7 @@ export default function CreateRoom() {
 
       router.push(`/room/${roomId}`);
     } catch (err) {
-      setError('Something went wrong, try again');
+      setError(t('create.errGeneric'));
       setLoading(false);
     }
   };
@@ -94,28 +96,28 @@ export default function CreateRoom() {
         onClick={() => router.push('/')}
         className="self-start md:self-auto md:absolute md:top-6 md:left-6 inline-flex items-center gap-1.5 text-sm text-fg-muted hover:text-fg transition-colors mb-6"
       >
-        <ArrowLeft size={16} /> Back
+        <ArrowLeft size={16} /> {t('common.back')}
       </button>
 
       <div className="w-full max-w-lg">
         <p className="text-[11px] text-brand-light uppercase tracking-[0.18em] text-center mb-3 font-medium">
-          New battle
+          {t('create.eyebrow')}
         </p>
         <h1 className="text-4xl md:text-5xl font-bold text-center mb-2 tracking-tight">
-          Create <span className="text-brand-light text-glow-brand">battle</span>
+          {t('create.titlePre')} <span className="text-brand-light text-glow-brand">{t('create.titleAccent')}</span>
         </h1>
         <p className="text-fg-muted text-center mb-9 text-sm">
-          Set the topic and the rules of the arena
+          {t('create.subtitle')}
         </p>
 
         <div className="space-y-5">
           <div>
-            <label className={labelCls}>Topic</label>
+            <label className={labelCls}>{t('create.topic')}</label>
             <input
               type="text"
               value={topic}
               onChange={(e) => setTopic(e.target.value)}
-              placeholder="e.g. AI vs Humanity"
+              placeholder={t('create.topicPlaceholder')}
               className={inputCls}
             />
           </div>
@@ -123,32 +125,32 @@ export default function CreateRoom() {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-[11px] font-medium uppercase tracking-wider text-sidea-light mb-2">
-                Red side
+                {t('create.redSide')}
               </label>
               <input
                 type="text"
                 value={labelA}
                 onChange={(e) => setLabelA(e.target.value)}
-                placeholder="Red team"
+                placeholder={t('create.redPlaceholder')}
                 className="w-full bg-panel border border-white/10 rounded-xl px-4 py-3 text-fg placeholder-fg-faint focus:outline-none focus:border-sidea transition-colors"
               />
             </div>
             <div>
               <label className="block text-[11px] font-medium uppercase tracking-wider text-sideb-light mb-2">
-                Blue side
+                {t('create.blueSide')}
               </label>
               <input
                 type="text"
                 value={labelB}
                 onChange={(e) => setLabelB(e.target.value)}
-                placeholder="Blue team"
+                placeholder={t('create.bluePlaceholder')}
                 className="w-full bg-panel border border-white/10 rounded-xl px-4 py-3 text-fg placeholder-fg-faint focus:outline-none focus:border-sideb transition-colors"
               />
             </div>
           </div>
 
           <div>
-            <label className={labelCls}>Rounds</label>
+            <label className={labelCls}>{t('create.rounds')}</label>
             <div className="flex items-center gap-3 bg-panel border border-white/10 rounded-xl px-3 py-2">
               <button
                 type="button"
@@ -161,7 +163,7 @@ export default function CreateRoom() {
               </button>
               <div className="flex-1 text-center">
                 <span className="text-xl font-semibold tabular-nums">{roundsCount}</span>
-                <span className="text-fg-muted text-sm ml-1.5">rounds</span>
+                <span className="text-fg-muted text-sm ml-1.5">{t('create.roundsWord')}</span>
               </div>
               <button
                 type="button"
@@ -177,7 +179,7 @@ export default function CreateRoom() {
 
           <div>
             <div className="flex items-center justify-between mb-2">
-              <span className="text-[11px] font-medium uppercase tracking-wider text-fg-muted">Round time</span>
+              <span className="text-[11px] font-medium uppercase tracking-wider text-fg-muted">{t('create.roundTime')}</span>
               <span className="text-sm font-semibold text-brand-light tabular-nums">{formatDuration(roundDuration)}</span>
             </div>
             <input
@@ -190,7 +192,7 @@ export default function CreateRoom() {
               className="w-full accent-brand cursor-pointer"
             />
             <div className="flex justify-between text-[11px] text-fg-faint mt-1.5">
-              <span>45 sec</span>
+              <span>45s</span>
               <span>3:00</span>
             </div>
           </div>
@@ -206,7 +208,7 @@ export default function CreateRoom() {
             disabled={loading}
             className="w-full inline-flex items-center justify-center gap-2 bg-brand hover:scale-[1.02] active:scale-[0.99] disabled:bg-panel disabled:text-fg-faint disabled:scale-100 text-brand-ink font-semibold py-3.5 rounded-xl transition-all glow-brand disabled:shadow-none"
           >
-            {loading ? 'Creating…' : (<>Create room <Plus size={18} /></>)}
+            {loading ? t('create.creating') : (<>{t('create.createRoom')} <Plus size={18} /></>)}
           </button>
         </div>
       </div>

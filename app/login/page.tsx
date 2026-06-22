@@ -4,10 +4,12 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Zap } from 'lucide-react';
 import { useAuth, apiUrl } from '../providers';
+import { useT, LanguageSwitcher } from '../i18n';
 
 export default function LoginPage() {
   const router = useRouter();
   const { refresh } = useAuth();
+  const { t, locale } = useT();
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -25,7 +27,7 @@ export default function LoginPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ email, password, displayName }),
+        body: JSON.stringify({ email, password, displayName, locale }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -36,7 +38,7 @@ export default function LoginPage() {
       await refresh();
       router.push('/');
     } catch {
-      setError('Network error, try again');
+      setError(t('login.networkError'));
       setLoading(false);
     }
   };
@@ -50,12 +52,15 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-ink text-fg font-sans flex flex-col items-center justify-center px-4 py-12">
-      <button
-        onClick={() => router.push('/')}
-        className="md:absolute md:top-6 md:left-6 inline-flex items-center gap-1.5 text-sm text-fg-muted hover:text-fg transition-colors mb-6 self-start"
-      >
-        <ArrowLeft size={16} /> Back
-      </button>
+      <div className="w-full max-w-sm flex items-center justify-between mb-6">
+        <button
+          onClick={() => router.push('/')}
+          className="inline-flex items-center gap-1.5 text-sm text-fg-muted hover:text-fg transition-colors"
+        >
+          <ArrowLeft size={16} /> {t('common.back')}
+        </button>
+        <LanguageSwitcher />
+      </div>
 
       <div className="w-full max-w-sm">
         <div className="flex items-center justify-center gap-2.5 mb-2">
@@ -65,7 +70,7 @@ export default function LoginPage() {
           <span className="text-2xl font-bold tracking-tight">Shoom</span>
         </div>
         <p className="text-fg-muted text-center mb-8 text-sm">
-          {mode === 'login' ? 'Welcome back to the arena' : 'Join the arena'}
+          {mode === 'login' ? t('login.welcomeBack') : t('login.join')}
         </p>
 
         {/* Social */}
@@ -74,19 +79,19 @@ export default function LoginPage() {
             onClick={() => social('google')}
             className="w-full flex items-center justify-center gap-2.5 bg-panel border border-white/10 hover:border-white/25 rounded-xl py-3 text-sm font-medium transition-colors"
           >
-            <GoogleIcon /> Continue with Google
+            <GoogleIcon /> {t('login.google')}
           </button>
           <button
             onClick={() => social('vk')}
             className="w-full flex items-center justify-center gap-2.5 bg-[#0077FF] hover:bg-[#0a82ff] text-white rounded-xl py-3 text-sm font-medium transition-colors"
           >
-            <VkIcon /> Continue with VK
+            <VkIcon /> {t('login.vk')}
           </button>
         </div>
 
         <div className="flex items-center gap-3 mb-5">
           <span className="flex-1 h-px bg-white/10" />
-          <span className="text-[11px] uppercase tracking-wider text-fg-faint">or</span>
+          <span className="text-[11px] uppercase tracking-wider text-fg-faint">{t('login.or')}</span>
           <span className="flex-1 h-px bg-white/10" />
         </div>
 
@@ -95,7 +100,7 @@ export default function LoginPage() {
           {mode === 'register' && (
             <input
               type="text"
-              placeholder="Display name"
+              placeholder={t('login.displayName')}
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
               className={inputCls}
@@ -103,7 +108,7 @@ export default function LoginPage() {
           )}
           <input
             type="email"
-            placeholder="Email"
+            placeholder={t('login.email')}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             className={inputCls}
@@ -111,7 +116,7 @@ export default function LoginPage() {
           />
           <input
             type="password"
-            placeholder="Password"
+            placeholder={t('login.password')}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             className={inputCls}
@@ -129,17 +134,17 @@ export default function LoginPage() {
             disabled={loading}
             className="w-full bg-brand text-brand-ink font-semibold py-3 rounded-xl transition-all hover:scale-[1.02] active:scale-[0.99] disabled:opacity-60 disabled:scale-100 glow-brand"
           >
-            {loading ? 'Please wait…' : mode === 'login' ? 'Sign in' : 'Create account'}
+            {loading ? t('login.wait') : mode === 'login' ? t('login.signIn') : t('login.createAccount')}
           </button>
         </form>
 
         <p className="text-center text-sm text-fg-muted mt-6">
-          {mode === 'login' ? "Don't have an account? " : 'Already have an account? '}
+          {mode === 'login' ? t('login.noAccount') : t('login.haveAccount')}
           <button
             onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setError(''); }}
             className="text-brand-light font-medium hover:underline"
           >
-            {mode === 'login' ? 'Sign up' : 'Sign in'}
+            {mode === 'login' ? t('login.signUp') : t('login.signIn')}
           </button>
         </p>
       </div>
