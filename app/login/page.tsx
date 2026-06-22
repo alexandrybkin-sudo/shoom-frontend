@@ -36,7 +36,7 @@ export default function LoginPage() {
         return;
       }
       await refresh();
-      router.push('/');
+      router.push(mode === 'register' ? '/onboarding' : '/');
     } catch {
       setError(t('login.networkError'));
       setLoading(false);

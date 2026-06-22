@@ -2,28 +2,49 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { Zap, Eye, Plus, Swords, Mic, Flame, LogOut } from 'lucide-react';
-import { useAuth } from './providers';
+import { Zap, Eye, Plus, Flame, LogOut, MessageCircle, Users } from 'lucide-react';
+import { useAuth, apiUrl } from './providers';
 import { useT, LanguageSwitcher } from './i18n';
+import { CategoryIcon } from './components/CategoryIcon';
+
+interface CategoryRow {
+  slug: string;
+  emoji: string;
+  topicsCount: number;
+  liveBattles: number;
+  new24h: number;
+}
+interface HotTopic {
+  slug: string;
+  title: string;
+  posts: number;
+  participants: number;
+  live: number;
+}
+interface LiveBattle {
+  id: string;
+  topic: string;
+  labelA: string;
+  labelB: string;
+  viewers: number;
+}
+interface HomeData {
+  categories: CategoryRow[];
+  hotTopics: HotTopic[];
+  liveBattles: LiveBattle[];
+}
 
 // 🐣 Easter egg: hover the logo for 3s and a tiny knight peeks out from behind it.
 function BrandLogo() {
   const [out, setOut] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const onEnter = () => {
-    timer.current = setTimeout(() => setOut(true), 3000);
-  };
-  const onLeave = () => {
-    if (timer.current) clearTimeout(timer.current);
-    setOut(false);
-  };
+  const onEnter = () => { timer.current = setTimeout(() => setOut(true), 3000); };
+  const onLeave = () => { if (timer.current) clearTimeout(timer.current); setOut(false); };
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
 
   return (
     <div className="flex items-center gap-2.5">
       <div className="relative" onMouseEnter={onEnter} onMouseLeave={onLeave}>
-        {/* the little knight — peeks out from behind the right edge of the logo */}
         <div
           aria-hidden
           className={`pointer-events-none absolute top-1/2 left-full -translate-y-1/2 z-0 transition-all duration-500 ease-out ${
@@ -31,30 +52,17 @@ function BrandLogo() {
           }`}
           style={{ marginLeft: '-18px' }}
         >
-         <div className={out ? 'animate-knight-bob' : ''}>
-          <svg width="34" height="38" viewBox="0 0 38 42" fill="none" xmlns="http://www.w3.org/2000/svg">
-            {/* plume */}
-            <path d="M19 2 C 24 4, 24 9, 19 12" stroke="#A06BFF" strokeWidth="3" strokeLinecap="round" />
-            {/* sword */}
-            <rect x="29.5" y="3" width="2.4" height="17" rx="1.2" fill="#E8EAF0" transform="rotate(22 30.7 11.5)" />
-            <rect x="26" y="15.5" width="8" height="2.6" rx="1.3" fill="#A06BFF" transform="rotate(22 30 16.8)" />
-            {/* helmet */}
-            <rect x="11" y="9" width="16" height="19" rx="7.5" fill="#C7CBD4" />
-            <rect x="11" y="9" width="16" height="19" rx="7.5" fill="url(#kg)" fillOpacity="0.25" />
-            {/* visor slits */}
-            <rect x="14.5" y="15" width="9" height="2.8" rx="1.4" fill="#2A2F3A" />
-            <rect x="14.5" y="19.5" width="9" height="2.2" rx="1.1" fill="#2A2F3A" />
-            <defs>
-              <linearGradient id="kg" x1="11" y1="9" x2="27" y2="28" gradientUnits="userSpaceOnUse">
-                <stop stopColor="#ffffff" />
-                <stop offset="1" stopColor="#8a8f9c" />
-              </linearGradient>
-            </defs>
-          </svg>
-         </div>
+          <div className={out ? 'animate-knight-bob' : ''}>
+            <svg width="34" height="38" viewBox="0 0 38 42" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M19 2 C 24 4, 24 9, 19 12" stroke="#A06BFF" strokeWidth="3" strokeLinecap="round" />
+              <rect x="29.5" y="3" width="2.4" height="17" rx="1.2" fill="#E8EAF0" transform="rotate(22 30.7 11.5)" />
+              <rect x="26" y="15.5" width="8" height="2.6" rx="1.3" fill="#A06BFF" transform="rotate(22 30 16.8)" />
+              <rect x="11" y="9" width="16" height="19" rx="7.5" fill="#C7CBD4" />
+              <rect x="14.5" y="15" width="9" height="2.8" rx="1.4" fill="#2A2F3A" />
+              <rect x="14.5" y="19.5" width="9" height="2.2" rx="1.1" fill="#2A2F3A" />
+            </svg>
+          </div>
         </div>
-
-        {/* logo on top, hides the knight's lower half */}
         <div className="relative z-10 w-8 h-8 bg-brand rounded-xl flex items-center justify-center glow-brand">
           <Zap className="text-brand-ink fill-brand-ink" size={18} />
         </div>
@@ -64,128 +72,27 @@ function BrandLogo() {
   );
 }
 
-interface Room {
-  id: string;
-  phase: string;
-  viewers: number;
-  topic: string;
-  labelA: string;
-  labelB: string;
-  hasDebaterA: boolean;
-  hasDebaterB: boolean;
-  isOpen: boolean;
-  isLive: boolean;
-}
-
-function phaseLabel(phase: string) {
-  switch (phase) {
-    case 'rageRound':
-      return { key: 'card.rageRound', icon: Flame, rage: true };
-    case 'round':
-      return { key: 'card.liveRound', icon: Mic, rage: false };
-    case 'finished':
-      return { key: 'card.voting', icon: Mic, rage: false };
-    default:
-      return { key: 'card.starting', icon: Mic, rage: false };
-  }
-}
-
-function BattleCard({ room, onClick }: { room: Room; onClick: () => void }) {
-  const { t } = useT();
-  const status = phaseLabel(room.phase);
-  const StatusIcon = status.icon;
-
-  return (
-    <div
-      onClick={onClick}
-      className="group relative bg-panel border border-white/[0.07] hover:border-brand/50 rounded-2xl p-4 cursor-pointer transition-all hover:-translate-y-0.5"
-    >
-      <div className="flex items-center justify-between mb-3.5">
-        {room.isOpen ? (
-          <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-brand-light bg-brand/[0.12] px-2.5 py-1 rounded-md">
-            {t('card.openChallenge')}
-          </span>
-        ) : (
-          <span
-            className={`inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-md ${
-              status.rage
-                ? 'text-rage-light bg-rage/[0.14]'
-                : 'text-brand-light bg-brand/[0.14]'
-            }`}
-          >
-            <StatusIcon size={13} />
-            {t(status.key)}
-          </span>
-        )}
-        <span className="inline-flex items-center gap-1.5 text-xs text-fg-muted">
-          <Eye size={15} />
-          {room.viewers}
-        </span>
-      </div>
-
-      <h3 className="text-base font-semibold leading-snug mb-4 group-hover:text-brand-light transition-colors">
-        {room.topic}
-      </h3>
-
-      {room.isOpen ? (
-        <div className="flex items-center justify-between gap-3">
-          <span className="text-sm text-fg-faint">{t('card.waitingOpponent')}</span>
-          <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-sm font-semibold text-brand-ink bg-brand px-3.5 py-2 rounded-lg glow-brand">
-            {t('card.accept')} <Swords size={15} />
-          </span>
-        </div>
-      ) : (
-        <div className="flex items-center gap-2.5">
-          <span className="flex-1 text-center text-xs font-semibold text-sidea-light bg-sidea/10 border border-sidea/25 py-2 rounded-lg truncate px-2">
-            {room.labelA}
-          </span>
-          <span className="text-[11px] font-bold text-fg-faint">VS</span>
-          <span className="flex-1 text-center text-xs font-semibold text-sideb-light bg-sideb/10 border border-sideb/25 py-2 rounded-lg truncate px-2">
-            {room.labelB}
-          </span>
-        </div>
-      )}
-    </div>
-  );
-}
-
-export default function Lobby() {
+export default function Home() {
   const router = useRouter();
   const { user, loading, logout } = useAuth();
-  const { t } = useT();
-  const [rooms, setRooms] = useState<Room[]>([]);
+  const { t, locale } = useT();
+  const [data, setData] = useState<HomeData>({ categories: [], hotTopics: [], liveBattles: [] });
 
   const goCreate = () => router.push(user ? '/create' : '/login');
 
   useEffect(() => {
-    const fetchRooms = async () => {
+    const fetchHome = async () => {
       try {
-        const API_URL =
-          typeof window !== 'undefined' && window.location.hostname !== 'localhost'
-            ? 'https://shoom.fun'
-            : 'http://localhost:3001';
-
-        const res = await fetch(`${API_URL}/api/rooms`, {
-          cache: 'no-store',
-          headers: { 'Cache-Control': 'no-cache' },
-        });
-
-        if (res.ok) {
-          const data = await res.json();
-          setRooms(data);
-        }
-      } catch (error) {
-        console.error('Failed to fetch rooms:', error);
+        const res = await fetch(`${apiUrl()}/api/forum/home?lang=${locale}`, { cache: 'no-store' });
+        if (res.ok) setData(await res.json());
+      } catch (e) {
+        console.error('Failed to load home:', e);
       }
     };
-
-    fetchRooms();
-    const intervalId = setInterval(fetchRooms, 3000);
-    return () => clearInterval(intervalId);
-  }, []);
-
-  const openRooms = rooms.filter((r) => r.isOpen);
-  const liveRooms = rooms.filter((r) => r.isLive);
+    fetchHome();
+    const id = setInterval(fetchHome, 4000);
+    return () => clearInterval(id);
+  }, [locale]);
 
   return (
     <div className="min-h-screen bg-ink text-fg font-sans selection:bg-brand/30 overflow-x-hidden">
@@ -205,13 +112,9 @@ export default function Lobby() {
                     {user.display_name.charAt(0).toUpperCase()}
                   </div>
                 )}
-                <span className="text-sm font-medium max-w-[120px] truncate">{user.display_name}</span>
+                <span className="text-sm font-medium max-w-[120px] truncate hidden sm:block">{user.display_name}</span>
               </div>
-              <button
-                onClick={logout}
-                aria-label={t('nav.logout')}
-                className="text-fg-muted hover:text-fg transition-colors"
-              >
+              <button onClick={logout} aria-label={t('nav.logout')} className="text-fg-muted hover:text-fg transition-colors">
                 <LogOut size={17} />
               </button>
             </div>
@@ -227,87 +130,101 @@ export default function Lobby() {
       </div>
 
       {/* Hero */}
-      <div className="relative pt-32 pb-14 px-6 flex flex-col items-center text-center">
-        <p className="text-[11px] text-brand-light uppercase tracking-[0.18em] mb-3.5 font-medium">
-          {t('lobby.eyebrow')}
-        </p>
-        <h1 className="text-5xl md:text-7xl font-bold tracking-tight leading-[1.05] mb-4">
+      <div className="relative pt-28 pb-10 px-6 flex flex-col items-center text-center">
+        <p className="text-[11px] text-brand-light uppercase tracking-[0.18em] mb-3 font-medium">{t('lobby.eyebrow')}</p>
+        <h1 className="text-4xl md:text-6xl font-bold tracking-tight leading-[1.05] mb-4">
           {t('lobby.titlePre')} <span className="text-brand-light text-glow-brand">{t('lobby.titleAccent')}</span>
         </h1>
-        <p className="text-fg-muted text-base md:text-lg max-w-xl mb-9 leading-relaxed">
-          {t('lobby.subtitle')}
-        </p>
-
-        <div className="w-full max-w-lg bg-panel border border-white/10 rounded-2xl p-1.5 pl-5 flex items-center gap-2">
-          <span className="flex-1 text-left text-sm md:text-base text-fg-faint">
-            {t('lobby.inputPlaceholder')}
-          </span>
-          <button
-            onClick={goCreate}
-            className="inline-flex items-center gap-2 bg-brand text-brand-ink px-5 py-3 rounded-xl font-semibold text-sm md:text-base transition-all hover:scale-[1.03] glow-brand"
-          >
-            {t('lobby.createBattle')}
-            <Plus size={18} />
-          </button>
-        </div>
+        <button
+          onClick={goCreate}
+          className="inline-flex items-center gap-2 bg-brand text-brand-ink px-6 py-3 rounded-xl font-semibold text-sm md:text-base transition-all hover:scale-[1.03] glow-brand"
+        >
+          {t('lobby.createBattle')} <Plus size={18} />
+        </button>
       </div>
 
-      {/* Lists */}
       <div className="px-6 pb-20">
         <div className="max-w-5xl mx-auto space-y-12">
-          {liveRooms.length > 0 && (
+          {/* Live rail */}
+          {data.liveBattles.length > 0 && (
             <section>
-              <div className="flex justify-between items-center mb-5">
-                <h2 className="text-xl md:text-2xl font-semibold">{t('lobby.liveNow')}</h2>
-                <span className="text-[11px] uppercase tracking-wider text-fg-muted flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-brand glow-brand" />
-                  {t('lobby.battlesOnline', { n: liveRooms.length })}
-                </span>
+              <div className="flex items-center gap-2 mb-4">
+                <span className="w-2 h-2 rounded-full bg-brand glow-brand" />
+                <h2 className="text-lg font-semibold">{t('lobby.liveNow')}</h2>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {liveRooms.map((room) => (
-                  <BattleCard key={room.id} room={room} onClick={() => router.push(`/room/${room.id}`)} />
+              <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-thin">
+                {data.liveBattles.map((b) => (
+                  <div
+                    key={b.id}
+                    onClick={() => router.push(`/room/${b.id}`)}
+                    className="shrink-0 w-64 bg-panel border border-white/[0.07] hover:border-brand/50 rounded-2xl p-4 cursor-pointer transition-all hover:-translate-y-0.5"
+                  >
+                    <div className="flex justify-end mb-2">
+                      <span className="inline-flex items-center gap-1.5 text-xs text-fg-muted"><Eye size={14} />{b.viewers}</span>
+                    </div>
+                    <h3 className="text-sm font-semibold leading-snug mb-3 line-clamp-2 min-h-[2.5rem]">{b.topic}</h3>
+                    <div className="flex items-center gap-2">
+                      <span className="flex-1 text-center text-[11px] font-semibold text-sidea-light bg-sidea/10 border border-sidea/25 py-1.5 rounded-lg truncate px-1">{b.labelA}</span>
+                      <span className="text-[10px] font-bold text-fg-faint">VS</span>
+                      <span className="flex-1 text-center text-[11px] font-semibold text-sideb-light bg-sideb/10 border border-sideb/25 py-1.5 rounded-lg truncate px-1">{b.labelB}</span>
+                    </div>
+                  </div>
                 ))}
               </div>
             </section>
           )}
 
-          {openRooms.length > 0 && (
+          {/* Hot rail */}
+          {data.hotTopics.length > 0 && (
             <section>
-              <div className="flex justify-between items-center mb-5">
-                <h2 className="text-xl md:text-2xl font-semibold">{t('lobby.openChallenges')}</h2>
-                <span className="text-[11px] uppercase tracking-wider text-fg-muted">
-                  {t('lobby.waiting', { n: openRooms.length })}
-                </span>
+              <div className="flex items-center gap-2 mb-4">
+                <Flame className="text-rage-light" size={18} />
+                <h2 className="text-lg font-semibold">{t('forum.hot')}</h2>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {openRooms.map((room) => (
-                  <BattleCard key={room.id} room={room} onClick={() => router.push(`/room/${room.id}`)} />
+              <div className="space-y-2">
+                {data.hotTopics.slice(0, 5).map((tp) => (
+                  <div key={tp.slug} className="flex items-center gap-3 bg-panel border border-white/[0.07] rounded-xl px-3.5 py-2.5">
+                    <span className="text-[11px] font-bold text-rage-light bg-rage/[0.14] px-2 py-1 rounded-md whitespace-nowrap">🔥 hot</span>
+                    <span className="flex-1 text-sm font-medium truncate">{tp.title}</span>
+                    <span className="hidden sm:inline-flex items-center gap-3 text-xs text-fg-muted whitespace-nowrap">
+                      <span className="inline-flex items-center gap-1"><MessageCircle size={13} />{tp.posts}</span>
+                      <span className="inline-flex items-center gap-1"><Users size={13} />{tp.participants}</span>
+                    </span>
+                  </div>
                 ))}
               </div>
             </section>
           )}
 
-          {rooms.length === 0 && (
-            <div className="text-center py-20">
-              <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-panel border border-white/[0.07] mb-4">
-                <Swords className="text-fg-faint" size={24} />
-              </div>
-              <p className="text-fg-muted">{t('lobby.emptyTitle')}</p>
-              <button
-                onClick={goCreate}
-                className="mt-5 inline-flex items-center gap-2 bg-brand text-brand-ink px-5 py-2.5 rounded-xl font-semibold text-sm transition-all hover:scale-[1.03] glow-brand"
-              >
-                {t('lobby.createBattle')} <Plus size={16} />
-              </button>
+          {/* Categories */}
+          <section>
+            <h2 className="text-lg font-semibold mb-4">{t('forum.categories')}</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {data.categories.map((c) => (
+                <div
+                  key={c.slug}
+                  onClick={() => router.push(`/c/${c.slug}`)}
+                  className="flex items-center gap-3 bg-panel border border-white/[0.07] hover:border-brand/40 rounded-2xl p-3 cursor-pointer transition-all hover:-translate-y-0.5"
+                >
+                  <div className="shrink-0 w-11 h-11 rounded-xl bg-panel-2 border border-brand/20 text-brand-light flex items-center justify-center glow-brand">
+                    <CategoryIcon slug={c.slug} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-semibold mb-1.5">{t(`cat.${c.slug}.title`)}</div>
+                    <div className="flex gap-3 text-[11px] text-fg-muted">
+                      <span>{t('forum.topicsCount', { n: c.topicsCount })}</span>
+                      {c.liveBattles > 0 && <span className="text-brand-light">{t('forum.liveCount', { n: c.liveBattles })}</span>}
+                      {c.new24h > 0 && <span className="text-[#7FCf9f]">{t('forum.new24h', { n: c.new24h })}</span>}
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
-          )}
+          </section>
         </div>
       </div>
 
-      <div className="py-8 text-center text-fg-faint text-sm border-t border-white/5">
-        {t('lobby.footer')}
-      </div>
+      <div className="py-8 text-center text-fg-faint text-sm border-t border-white/5">{t('lobby.footer')}</div>
     </div>
   );
 }
