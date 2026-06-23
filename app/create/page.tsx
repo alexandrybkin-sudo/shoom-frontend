@@ -65,19 +65,30 @@ export default function CreateRoom() {
           roundDuration,
         }),
       });
+      if (!createRes.ok) throw new Error(`create failed: ${createRes.status}`);
       const { roomId } = await createRes.json();
+      if (!roomId) throw new Error('no roomId returned');
 
+      // Join to claim a debater slot. Best-effort — even if it hiccups we can still enter.
       const identity = getOrCreateSessionIdentity(roomId);
-      const joinRes = await fetch(`${API_URL}/api/rooms/${roomId}/join`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ identity }),
-      });
-      const { role, slot } = await joinRes.json();
+      let role = 'debater';
+      let slot = '';
+      try {
+        const joinRes = await fetch(`${API_URL}/api/rooms/${roomId}/join`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ identity }),
+        });
+        if (joinRes.ok) {
+          const data = await joinRes.json();
+          role = data.role;
+          slot = data.slot || '';
+        }
+      } catch {}
 
       sessionStorage.setItem(`shoom-role-${roomId}`, role);
-      sessionStorage.setItem(`shoom-slot-${roomId}`, slot || '');
+      sessionStorage.setItem(`shoom-slot-${roomId}`, slot);
 
       router.push(`/room/${roomId}`);
     } catch (err) {
