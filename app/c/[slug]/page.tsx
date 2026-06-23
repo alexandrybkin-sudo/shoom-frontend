@@ -76,7 +76,11 @@ export default function CategoryPage() {
         ) : (
           <div className="space-y-3">
             {topics.map((tp) => (
-              <div key={tp.slug} className="bg-panel border border-white/[0.07] rounded-2xl p-4">
+              <div
+                key={tp.slug}
+                onClick={() => router.push(`/t/${tp.slug}`)}
+                className="bg-panel border border-white/[0.07] hover:border-brand/40 rounded-2xl p-4 cursor-pointer transition-all hover:-translate-y-0.5"
+              >
                 <h3 className="text-base font-semibold leading-snug mb-3">{tp.title}</h3>
                 <div className="flex items-center gap-2 mb-3">
                   <span className="text-[11px] font-semibold text-sidea-light bg-sidea/10 border border-sidea/25 px-2.5 py-1 rounded-lg">{tp.sideA}</span>

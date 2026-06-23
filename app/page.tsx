@@ -8,6 +8,7 @@ import { useT, LanguageSwitcher } from './i18n';
 import { CategoryIcon } from './components/CategoryIcon';
 
 interface CategoryRow {
+  id: string | number;
   slug: string;
   emoji: string;
   topicsCount: number;
@@ -77,8 +78,24 @@ export default function Home() {
   const { user, loading, logout } = useAuth();
   const { t, locale } = useT();
   const [data, setData] = useState<HomeData>({ categories: [], hotTopics: [], liveBattles: [] });
+  const [interests, setInterests] = useState<Set<number>>(new Set());
 
   const goCreate = () => router.push(user ? '/create' : '/login');
+
+  // Personalization: pull the user's interests to float their categories to the top.
+  useEffect(() => {
+    if (!user) { setInterests(new Set()); return; }
+    fetch(`${apiUrl()}/api/forum/interests`, { credentials: 'include' })
+      .then((r) => (r.ok ? r.json() : { categoryIds: [] }))
+      .then((d) => setInterests(new Set((d.categoryIds || []).map(Number))))
+      .catch(() => {});
+  }, [user]);
+
+  const orderedCategories = [...data.categories].sort((a, b) => {
+    const ai = interests.has(Number(a.id)) ? 0 : 1;
+    const bi = interests.has(Number(b.id)) ? 0 : 1;
+    return ai - bi;
+  });
 
   useEffect(() => {
     const fetchHome = async () => {
@@ -183,7 +200,11 @@ export default function Home() {
               </div>
               <div className="space-y-2">
                 {data.hotTopics.slice(0, 5).map((tp) => (
-                  <div key={tp.slug} className="flex items-center gap-3 bg-panel border border-white/[0.07] rounded-xl px-3.5 py-2.5">
+                  <div
+                    key={tp.slug}
+                    onClick={() => router.push(`/t/${tp.slug}`)}
+                    className="flex items-center gap-3 bg-panel border border-white/[0.07] hover:border-brand/40 rounded-xl px-3.5 py-2.5 cursor-pointer transition-all hover:-translate-y-0.5"
+                  >
                     <span className="text-[11px] font-bold text-rage-light bg-rage/[0.14] px-2 py-1 rounded-md whitespace-nowrap">🔥 hot</span>
                     <span className="flex-1 text-sm font-medium truncate">{tp.title}</span>
                     <span className="hidden sm:inline-flex items-center gap-3 text-xs text-fg-muted whitespace-nowrap">
@@ -200,17 +221,22 @@ export default function Home() {
           <section>
             <h2 className="text-lg font-semibold mb-4">{t('forum.categories')}</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {data.categories.map((c) => (
+              {orderedCategories.map((c) => (
                 <div
                   key={c.slug}
                   onClick={() => router.push(`/c/${c.slug}`)}
-                  className="flex items-center gap-3 bg-panel border border-white/[0.07] hover:border-brand/40 rounded-2xl p-3 cursor-pointer transition-all hover:-translate-y-0.5"
+                  className={`flex items-center gap-3 bg-panel border rounded-2xl p-3 cursor-pointer transition-all hover:-translate-y-0.5 ${
+                    interests.has(Number(c.id)) ? 'border-brand/40' : 'border-white/[0.07] hover:border-brand/40'
+                  }`}
                 >
                   <div className="shrink-0 w-11 h-11 rounded-xl bg-panel-2 border border-brand/20 text-brand-light flex items-center justify-center glow-brand">
                     <CategoryIcon slug={c.slug} />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="text-sm font-semibold mb-1.5">{t(`cat.${c.slug}.title`)}</div>
+                    <div className="text-sm font-semibold mb-1.5 flex items-center gap-1.5">
+                      {t(`cat.${c.slug}.title`)}
+                      {interests.has(Number(c.id)) && <span className="text-[9px] text-brand-light uppercase tracking-wider font-medium bg-brand/15 px-1.5 py-0.5 rounded">{t('forum.forYou')}</span>}
+                    </div>
                     <div className="flex gap-3 text-[11px] text-fg-muted">
                       <span>{t('forum.topicsCount', { n: c.topicsCount })}</span>
                       {c.liveBattles > 0 && <span className="text-brand-light">{t('forum.liveCount', { n: c.liveBattles })}</span>}
