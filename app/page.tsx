@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { Zap, Eye, Plus, Flame, LogOut, MessageCircle, Users } from 'lucide-react';
+import { Zap, Eye, Plus, Flame, LogOut, MessageCircle, Users, Swords } from 'lucide-react';
 import { useAuth, apiUrl } from './providers';
 import { useT, LanguageSwitcher } from './i18n';
 import { CategoryIcon } from './components/CategoryIcon';
@@ -28,6 +28,8 @@ interface LiveBattle {
   labelA: string;
   labelB: string;
   viewers: number;
+  isOpen: boolean;
+  isLive: boolean;
 }
 interface HomeData {
   categories: CategoryRow[];
@@ -79,6 +81,7 @@ export default function Home() {
   const { t, locale } = useT();
   const [data, setData] = useState<HomeData>({ categories: [], hotTopics: [], liveBattles: [] });
   const [interests, setInterests] = useState<Set<number>>(new Set());
+  const [roomTab, setRoomTab] = useState<'live' | 'open'>('live');
 
   const goCreate = () => router.push(user ? '/create' : '/login');
 
@@ -162,34 +165,75 @@ export default function Home() {
 
       <div className="px-6 pb-20">
         <div className="max-w-5xl mx-auto space-y-12">
-          {/* Live rail */}
-          {data.liveBattles.length > 0 && (
-            <section>
-              <div className="flex items-center gap-2 mb-4">
-                <span className="w-2 h-2 rounded-full bg-brand glow-brand" />
-                <h2 className="text-lg font-semibold">{t('lobby.liveNow')}</h2>
-              </div>
-              <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-thin">
-                {data.liveBattles.map((b) => (
-                  <div
-                    key={b.id}
-                    onClick={() => router.push(`/room/${b.id}`)}
-                    className="shrink-0 w-64 bg-panel border border-white/[0.07] hover:border-brand/50 rounded-2xl p-4 cursor-pointer transition-all hover:-translate-y-0.5"
-                  >
-                    <div className="flex justify-end mb-2">
-                      <span className="inline-flex items-center gap-1.5 text-xs text-fg-muted"><Eye size={14} />{b.viewers}</span>
-                    </div>
-                    <h3 className="text-sm font-semibold leading-snug mb-3 line-clamp-2 min-h-[2.5rem]">{b.topic}</h3>
-                    <div className="flex items-center gap-2">
-                      <span className="flex-1 text-center text-[11px] font-semibold text-sidea-light bg-sidea/10 border border-sidea/25 py-1.5 rounded-lg truncate px-1">{b.labelA}</span>
-                      <span className="text-[10px] font-bold text-fg-faint">VS</span>
-                      <span className="flex-1 text-center text-[11px] font-semibold text-sideb-light bg-sideb/10 border border-sideb/25 py-1.5 rounded-lg truncate px-1">{b.labelB}</span>
-                    </div>
+          {/* Debates: Live / Waiting toggle */}
+          {data.liveBattles.length > 0 && (() => {
+            const live = data.liveBattles.filter((b) => b.isLive);
+            const open = data.liveBattles.filter((b) => b.isOpen);
+            const shown = roomTab === 'live' ? live : open;
+            return (
+              <section>
+                <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
+                  <h2 className="text-lg font-semibold">{t('forum.debates')}</h2>
+                  <div className="inline-flex items-center gap-0.5 bg-panel border border-white/10 rounded-lg p-0.5">
+                    <button
+                      onClick={() => setRoomTab('live')}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
+                        roomTab === 'live' ? 'bg-brand text-brand-ink' : 'text-fg-muted hover:text-fg'
+                      }`}
+                    >
+                      <span className={`w-1.5 h-1.5 rounded-full ${roomTab === 'live' ? 'bg-brand-ink' : 'bg-brand'}`} />
+                      {t('forum.tabLive')} {live.length > 0 && `· ${live.length}`}
+                    </button>
+                    <button
+                      onClick={() => setRoomTab('open')}
+                      className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
+                        roomTab === 'open' ? 'bg-brand text-brand-ink' : 'text-fg-muted hover:text-fg'
+                      }`}
+                    >
+                      {t('forum.tabWaiting')} {open.length > 0 && `· ${open.length}`}
+                    </button>
                   </div>
-                ))}
-              </div>
-            </section>
-          )}
+                </div>
+
+                {shown.length === 0 ? (
+                  <p className="text-fg-faint text-sm py-4">{roomTab === 'live' ? t('forum.noLive') : t('forum.noWaiting')}</p>
+                ) : (
+                  <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-thin">
+                    {shown.map((b) => (
+                      <div
+                        key={b.id}
+                        onClick={() => router.push(`/room/${b.id}`)}
+                        className="shrink-0 w-64 bg-panel border border-white/[0.07] hover:border-brand/50 rounded-2xl p-4 cursor-pointer transition-all hover:-translate-y-0.5"
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          {b.isOpen ? (
+                            <span className="text-[11px] font-medium text-brand-light bg-brand/[0.12] px-2 py-0.5 rounded-md">{t('card.openChallenge')}</span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-brand-light bg-brand/[0.14] px-2 py-0.5 rounded-md">
+                              <span className="w-1.5 h-1.5 rounded-full bg-brand" /> {t('card.liveRound')}
+                            </span>
+                          )}
+                          <span className="inline-flex items-center gap-1.5 text-xs text-fg-muted"><Eye size={14} />{b.viewers}</span>
+                        </div>
+                        <h3 className="text-sm font-semibold leading-snug mb-3 line-clamp-2 min-h-[2.5rem]">{b.topic}</h3>
+                        {b.isOpen ? (
+                          <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-ink bg-brand w-full justify-center py-1.5 rounded-lg glow-brand">
+                            {t('card.accept')} <Swords size={14} />
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <span className="flex-1 text-center text-[11px] font-semibold text-sidea-light bg-sidea/10 border border-sidea/25 py-1.5 rounded-lg truncate px-1">{b.labelA}</span>
+                            <span className="text-[10px] font-bold text-fg-faint">VS</span>
+                            <span className="flex-1 text-center text-[11px] font-semibold text-sideb-light bg-sideb/10 border border-sideb/25 py-1.5 rounded-lg truncate px-1">{b.labelB}</span>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+            );
+          })()}
 
           {/* Hot rail */}
           {data.hotTopics.length > 0 && (
