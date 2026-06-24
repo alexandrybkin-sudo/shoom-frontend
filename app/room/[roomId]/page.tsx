@@ -12,6 +12,7 @@ import {
 import '@livekit/components-styles';
 import { Track, RoomOptions, VideoPresets } from 'livekit-client';
 import { useT, LanguageSwitcher } from '../../i18n';
+import { ReactionIcon, REACTIONS } from '../../components/ReactionIcon';
 
 type Phase = 'waiting' | 'coinflip' | 'round' | 'rageRound' | 'finished';
 type Role = 'viewer' | 'admin' | 'debater';
@@ -27,7 +28,7 @@ interface Message {
 interface FloatingEmoji {
   id: number;
   x: number;
-  emoji: string;
+  type: string;
 }
 
 interface ServerState {
@@ -404,9 +405,8 @@ export default function DebateRoom() {
     });
 
     socket.on('reaction_received', (data) => {
-      const emoji = data.type === 'heart' ? '❤️' : '💩';
       const id = Date.now() + Math.random();
-      setFloatingEmojis((prev) => [...prev, { id, x: Math.random() * 80 + 10, emoji }]);
+      setFloatingEmojis((prev) => [...prev, { id, x: Math.random() * 80 + 10, type: data.type }]);
       setTimeout(() => setFloatingEmojis((prev) => prev.filter((e) => e.id !== id)), 2000);
     });
 
@@ -464,7 +464,7 @@ export default function DebateRoom() {
     setVoteError('');
   }, [serverState.voteWindowEndsAt]);
 
-  const sendReaction = (type: 'heart' | 'poop') =>
+  const sendReaction = (type: string) =>
     socketRef.current?.emit('send_reaction', { type });
 
   const sendDonation = () =>
@@ -589,10 +589,10 @@ export default function DebateRoom() {
             {floatingEmojis.map((emoji) => (
               <div
                 key={emoji.id}
-                className="absolute text-4xl pointer-events-none animate-float-up z-30"
+                className="absolute pointer-events-none animate-float-up z-30"
                 style={{ left: `${emoji.x}%`, bottom: '10%' }}
               >
-                {emoji.emoji}
+                <ReactionIcon type={emoji.type} size={42} />
               </div>
             ))}
 
@@ -698,13 +698,17 @@ export default function DebateRoom() {
         </div>
 
         {uiRole === 'viewer' && (
-          <div className="px-3 py-2 flex justify-center gap-4 border-t border-white/5">
-            <button onClick={() => sendReaction('heart')} className="text-xl hover:scale-125 transition-transform">
-              ❤️
-            </button>
-            <button onClick={() => sendReaction('poop')} className="text-xl hover:scale-125 transition-transform">
-              💩
-            </button>
+          <div className="px-3 py-2 flex justify-center gap-3 border-t border-white/5">
+            {REACTIONS.map((r) => (
+              <button
+                key={r}
+                onClick={() => sendReaction(r)}
+                aria-label={r}
+                className="w-9 h-9 rounded-xl bg-panel-2 border border-white/10 hover:border-white/25 flex items-center justify-center hover:scale-110 transition-all"
+              >
+                <ReactionIcon type={r} size={22} />
+              </button>
+            ))}
           </div>
         )}
 
