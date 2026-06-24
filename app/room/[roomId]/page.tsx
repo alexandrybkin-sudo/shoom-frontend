@@ -13,7 +13,7 @@ import '@livekit/components-styles';
 import { Track, RoomOptions, VideoPresets } from 'livekit-client';
 import { useT, LanguageSwitcher } from '../../i18n';
 
-type Phase = 'waiting' | 'round' | 'rageRound' | 'finished';
+type Phase = 'waiting' | 'coinflip' | 'round' | 'rageRound' | 'finished';
 type Role = 'viewer' | 'admin' | 'debater';
 
 interface Message {
@@ -45,6 +45,8 @@ interface ServerState {
   labelA?: string;
   labelB?: string;
   matchId?: string | null;
+  coinFlipResult?: 'A' | 'B' | null;
+  coinFlipEndsAt?: number | null;
   voteWindowEndsAt?: number | null;
   voteShareA?: number;
   voteShareB?: number;
@@ -225,6 +227,55 @@ function VerdictOverlay({
           {t('room.votersNote', { n: verdict?.totalVoters ?? 0 })}
         </p>
       </div>
+    </div>
+  );
+}
+
+function CoinFlipOverlay({ result, labelA, labelB }: { result: 'A' | 'B' | null | undefined; labelA: string; labelB: string }) {
+  const { t } = useT();
+  const [rot, setRot] = useState(0);
+  const [landed, setLanded] = useState(false);
+
+  useEffect(() => {
+    const blue = result === 'B';
+    const target = 360 * 5 + (blue ? 180 : 0);
+    const raf = requestAnimationFrame(() => requestAnimationFrame(() => setRot(target)));
+    const tid = setTimeout(() => setLanded(true), 2700);
+    return () => { cancelAnimationFrame(raf); clearTimeout(tid); };
+  }, [result]);
+
+  const blue = result === 'B';
+  const faceBase: React.CSSProperties = {
+    position: 'absolute', inset: 0, borderRadius: '9999px',
+    WebkitBackfaceVisibility: 'hidden', backfaceVisibility: 'hidden',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    fontWeight: 700, fontSize: 15, letterSpacing: '0.04em', padding: '0 10px', textAlign: 'center',
+  };
+
+  return (
+    <div className="absolute inset-0 bg-ink/92 flex flex-col items-center justify-center z-50 backdrop-blur-sm animate-fade-in px-4">
+      <p className="text-[11px] text-brand-light uppercase tracking-[0.18em] mb-6 font-medium">{t('coin.title')}</p>
+      <div className="flex items-center gap-4 mb-7">
+        <span className={`text-sm font-semibold transition-all ${landed && !blue ? 'text-sidea-light scale-125' : 'text-sidea-light/70'}`}>{labelA}</span>
+        <span className="text-[11px] font-bold text-fg-faint">VS</span>
+        <span className={`text-sm font-semibold transition-all ${landed && blue ? 'text-sideb-light scale-125' : 'text-sideb-light/70'}`}>{labelB}</span>
+      </div>
+      <div style={{ perspective: 900, WebkitPerspective: 900, width: 150, height: 150 }}>
+        <div
+          style={{
+            position: 'relative', width: '100%', height: '100%',
+            WebkitTransformStyle: 'preserve-3d', transformStyle: 'preserve-3d',
+            transition: 'transform 2.6s cubic-bezier(.2,.7,.2,1)',
+            WebkitTransform: `rotateY(${rot}deg)`, transform: `rotateY(${rot}deg)`,
+          }}
+        >
+          <div style={{ ...faceBase, background: '#FF4D4D', color: '#2A0808', boxShadow: 'inset 0 0 0 5px rgba(255,255,255,.18), 0 0 32px rgba(255,77,77,.55)' }}>{labelA}</div>
+          <div style={{ ...faceBase, background: '#4F8DFF', color: '#0A1A3A', WebkitTransform: 'rotateY(180deg)', transform: 'rotateY(180deg)', boxShadow: 'inset 0 0 0 5px rgba(255,255,255,.18), 0 0 32px rgba(79,141,255,.55)' }}>{labelB}</div>
+        </div>
+      </div>
+      <p className="h-7 mt-7 text-base font-semibold" style={{ color: landed ? (blue ? '#9DC0FF' : '#FF8A8A') : '#9AA0AB' }}>
+        {landed ? t('coin.goesFirst', { label: blue ? labelB : labelA }) : '…'}
+      </p>
     </div>
   );
 }
@@ -598,6 +649,10 @@ export default function DebateRoom() {
                   )}
                 </div>
               </div>
+            )}
+
+            {serverState.phase === 'coinflip' && (
+              <CoinFlipOverlay result={serverState.coinFlipResult} labelA={labelA} labelB={labelB} />
             )}
 
             <VerdictOverlay

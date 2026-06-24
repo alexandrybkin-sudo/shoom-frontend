@@ -125,6 +125,8 @@ export const messages: Record<Locale, Dict> = {
     'topic.replyPlaceholder': 'Add your argument…',
     'topic.noPosts': 'No replies yet. Be the first.',
     'topic.signInToReply': 'Sign in to join the debate',
+    'coin.title': 'Who goes first',
+    'coin.goesFirst': '{label} goes first',
 
     'cat.money.title': 'Money & status',
     'cat.love.title': 'Love & relationships',
@@ -248,6 +250,8 @@ export const messages: Record<Locale, Dict> = {
     'topic.replyPlaceholder': 'Добавь свой аргумент…',
     'topic.noPosts': 'Пока нет реплик. Будь первым.',
     'topic.signInToReply': 'Войди, чтобы участвовать в споре',
+    'coin.title': 'Кто ходит первым',
+    'coin.goesFirst': '{label} ходит первым',
 
     'cat.money.title': 'Деньги и статус',
     'cat.love.title': 'Любовь и отношения',
@@ -371,6 +375,8 @@ export const messages: Record<Locale, Dict> = {
     'topic.replyPlaceholder': 'Añade tu argumento…',
     'topic.noPosts': 'Aún no hay respuestas. Sé el primero.',
     'topic.signInToReply': 'Entra para unirte al debate',
+    'coin.title': 'Quién va primero',
+    'coin.goesFirst': '{label} va primero',
 
     'cat.money.title': 'Dinero y estatus',
     'cat.love.title': 'Amor y relaciones',
