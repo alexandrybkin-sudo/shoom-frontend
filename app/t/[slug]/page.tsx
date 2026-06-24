@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { ArrowLeft, Swords, MessageCircle, Users, Send } from 'lucide-react';
+import { ArrowLeft, Swords, MessageCircle, Users, Send, Bell, Check } from 'lucide-react';
 import { useAuth, apiUrl } from '../../providers';
 import { useT, LanguageSwitcher } from '../../i18n';
 
@@ -49,6 +49,7 @@ export default function TopicPage() {
   const [body, setBody] = useState('');
   const [posting, setPosting] = useState(false);
   const [starting, setStarting] = useState(false);
+  const [following, setFollowing] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -64,6 +65,30 @@ export default function TopicPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (!user || !topic) { setFollowing(false); return; }
+    fetch(`${apiUrl()}/api/forum/follow?targetType=topic&targetId=${topic.id}`, { credentials: 'include' })
+      .then((r) => r.json())
+      .then((d) => setFollowing(!!d.following))
+      .catch(() => {});
+  }, [user, topic]);
+
+  const toggleFollow = async () => {
+    if (!user) { router.push('/login'); return; }
+    if (!topic) return;
+    setFollowing((f) => !f);
+    try {
+      const r = await fetch(`${apiUrl()}/api/forum/follow`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ targetType: 'topic', targetId: topic.id }),
+      });
+      const d = await r.json();
+      setFollowing(!!d.following);
+    } catch {}
+  };
 
   const submitReply = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -142,10 +167,20 @@ export default function TopicPage() {
               <span className="text-[11px] font-bold text-fg-faint">VS</span>
               <span className="text-xs font-semibold text-sideb-light bg-sideb/10 border border-sideb/25 px-3 py-1.5 rounded-lg">{topic.sideB}</span>
             </div>
-            <div className="flex flex-wrap gap-4 text-xs text-fg-muted mb-5">
-              <span className="inline-flex items-center gap-1.5"><MessageCircle size={14} />{t('forum.replies', { n: topic.posts })}</span>
-              <span className="inline-flex items-center gap-1.5"><Users size={14} />{t('forum.participants', { n: topic.participants })}</span>
-              <span className="inline-flex items-center gap-1.5"><Swords size={14} />{t('forum.battles', { n: topic.battles })}</span>
+            <div className="flex items-center justify-between gap-3 mb-5 flex-wrap">
+              <div className="flex flex-wrap gap-4 text-xs text-fg-muted">
+                <span className="inline-flex items-center gap-1.5"><MessageCircle size={14} />{t('forum.replies', { n: topic.posts })}</span>
+                <span className="inline-flex items-center gap-1.5"><Users size={14} />{t('forum.participants', { n: topic.participants })}</span>
+                <span className="inline-flex items-center gap-1.5"><Swords size={14} />{t('forum.battles', { n: topic.battles })}</span>
+              </div>
+              <button
+                onClick={toggleFollow}
+                className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-all ${
+                  following ? 'bg-brand/15 text-brand-light border border-brand/30' : 'bg-panel border border-white/10 hover:border-brand/40'
+                }`}
+              >
+                {following ? <><Check size={14} /> {t('forum.subscribed')}</> : <><Bell size={14} /> {t('forum.subscribe')}</>}
+              </button>
             </div>
 
             <button
