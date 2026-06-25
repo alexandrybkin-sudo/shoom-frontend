@@ -14,6 +14,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
+  const [username, setUsername] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -27,7 +28,7 @@ export default function LoginPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ email, password, displayName, locale }),
+        body: JSON.stringify({ email, password, displayName, username, locale }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -105,6 +106,19 @@ export default function LoginPage() {
               onChange={(e) => setDisplayName(e.target.value)}
               className={inputCls}
             />
+          )}
+          {mode === 'register' && (
+            <div className="relative">
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-fg-faint text-sm pointer-events-none">@</span>
+              <input
+                type="text"
+                placeholder={t('login.username')}
+                value={username}
+                onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                maxLength={20}
+                className={`${inputCls} pl-8`}
+              />
+            </div>
           )}
           <input
             type="email"

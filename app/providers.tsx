@@ -7,6 +7,7 @@ export interface User {
   email: string | null;
   display_name: string;
   avatar_url: string | null;
+  username: string | null;
 }
 
 export function apiUrl() {

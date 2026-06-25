@@ -132,7 +132,10 @@ export default function Home() {
                     {user.display_name.charAt(0).toUpperCase()}
                   </div>
                 )}
-                <span className="text-sm font-medium max-w-[120px] truncate hidden sm:block">{user.display_name}</span>
+                <div className="hidden sm:flex flex-col leading-tight">
+                  <span className="text-sm font-medium max-w-[140px] truncate">{user.display_name}</span>
+                  {user.username && <span className="text-[11px] text-fg-faint max-w-[140px] truncate">@{user.username}</span>}
+                </div>
               </div>
               <button onClick={logout} aria-label={t('nav.logout')} className="text-fg-muted hover:text-fg transition-colors">
                 <LogOut size={17} />
