@@ -8,6 +8,7 @@ import {
   ParticipantTile,
   useTracks,
   RoomAudioRenderer,
+  useLocalParticipant,
 } from '@livekit/components-react';
 import '@livekit/components-styles';
 import { Track, RoomOptions, VideoPresets } from 'livekit-client';
@@ -230,6 +231,16 @@ function VerdictOverlay({
       </div>
     </div>
   );
+}
+
+// Reliably mutes/unmutes the local debater's microphone by turn (server also gates it via permissions).
+function MicController({ enabled }: { enabled: boolean }) {
+  const { localParticipant } = useLocalParticipant();
+  useEffect(() => {
+    if (!localParticipant) return;
+    localParticipant.setMicrophoneEnabled(enabled).catch(() => {});
+  }, [enabled, localParticipant]);
+  return null;
 }
 
 function CoinFlipOverlay({ result, labelA, labelB }: { result: 'A' | 'B' | null | undefined; labelA: string; labelB: string }) {
@@ -533,6 +544,14 @@ export default function DebateRoom() {
           <div className="flex-1 min-h-0 w-full relative">
             <DualSpeakerView activeSpeaker={serverState.activeSpeaker} labelA={labelA} labelB={labelB} />
             <RoomAudioRenderer />
+            {lkRole === 'debater' && (
+              <MicController
+                enabled={
+                  serverState.phase === 'rageRound' ||
+                  (serverState.phase === 'round' && serverState.activeSpeaker === mySlot)
+                }
+              />
+            )}
 
             {/* Phase + timer HUD */}
             <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 inline-flex items-center gap-2.5 bg-brand/15 border border-brand/40 text-brand-light text-xs font-semibold px-3.5 py-1.5 rounded-xl backdrop-blur glow-brand">
