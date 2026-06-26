@@ -14,6 +14,7 @@ import '@livekit/components-styles';
 import { Track, RoomOptions, VideoPresets } from 'livekit-client';
 import { useT, LanguageSwitcher } from '../../i18n';
 import { ReactionIcon, REACTIONS } from '../../components/ReactionIcon';
+import { useAuth } from '../../providers';
 
 type Phase = 'waiting' | 'coinflip' | 'round' | 'rageRound' | 'finished';
 type Role = 'viewer' | 'admin' | 'debater';
@@ -24,6 +25,7 @@ interface Message {
   text: string;
   isDonation: boolean;
   amount?: number;
+  side?: 'A' | 'B' | null;
 }
 
 interface FloatingEmoji {
@@ -136,7 +138,7 @@ function SpeakerTile({
       {/* Name + side */}
       <div className="absolute bottom-2.5 left-2.5 flex items-center gap-1.5">
         <span className="text-[11px] font-semibold text-fg bg-black/55 px-2 py-1 rounded-md">
-          {trackRef ? trackRef.participant.identity : label}
+          {trackRef ? (trackRef.participant.name || trackRef.participant.identity) : label}
         </span>
         <span className={`text-[10px] font-bold px-2 py-1 rounded-md uppercase ${tagBg}`}>
           {label}
@@ -294,6 +296,7 @@ function CoinFlipOverlay({ result, labelA, labelB }: { result: 'A' | 'B' | null 
 
 export default function DebateRoom() {
   const { t } = useT();
+  const { user } = useAuth();
   const [uiRole, setUiRole] = useState<Role>('viewer');
   const [lkRole, setLkRole] = useState<'viewer' | 'debater'>('viewer');
   const [mySlot, setMySlot] = useState<'A' | 'B' | null>(null);
@@ -302,7 +305,9 @@ export default function DebateRoom() {
   const [floatingEmojis, setFloatingEmojis] = useState<FloatingEmoji[]>([]);
   const [token, setToken] = useState('');
   const [showVoteModal, setShowVoteModal] = useState(false);
-  const [myVote, setMyVote] = useState<'A' | 'B' | null>(null);
+  // The side the viewer is backing. Sticky across windows (colors their chat nick);
+  // cleared only when a new match starts. null = undecided (gray).
+  const [mySide, setMySide] = useState<'A' | 'B' | null>(null);
   const [voteError, setVoteError] = useState('');
   const [serverState, setServerState] = useState<ServerState>({
     phase: 'waiting',
@@ -372,7 +377,8 @@ export default function DebateRoom() {
         setMySlot((slot as 'A' | 'B') || null);
 
         const tokenRes = await fetch(
-          `${API_URL}/api/token?roomName=${encodeURIComponent(roomIdFromUrl)}&participantName=${encodeURIComponent(identity)}&role=${encodeURIComponent(lkRoleValue)}`
+          `${API_URL}/api/token?roomName=${encodeURIComponent(roomIdFromUrl)}&participantName=${encodeURIComponent(identity)}&role=${encodeURIComponent(lkRoleValue)}`,
+          { credentials: 'include' }
         );
         const tokenData = await tokenRes.json();
         setToken(tokenData.token);
@@ -427,13 +433,21 @@ export default function DebateRoom() {
     };
   }, []);
 
+  const myNick =
+    uiRole === 'admin'
+      ? 'Admin'
+      : user
+        ? (user.username ? `@${user.username}` : user.display_name)
+        : t('room.guest');
+
   const sendChatMessage = (text: string, isDonation = false, amount = 0) => {
     if (!socketRef.current) return;
     socketRef.current.emit('send_message', {
-      user: uiRole === 'admin' ? 'Admin' : 'Me',
+      user: myNick,
       text,
       isDonation,
       amount,
+      side: mySide,
     });
   };
 
@@ -448,7 +462,8 @@ export default function DebateRoom() {
   const castVote = async (side: 'A' | 'B') => {
     const matchId = serverState.matchId;
     if (!matchId) return;
-    setMyVote(side); // optimistic
+    const prev = mySide;
+    setMySide(side); // optimistic — also recolors the nick
     try {
       const res = await fetch(`${getApiUrl()}/api/matches/${matchId}/vote`, {
         method: 'POST',
@@ -458,22 +473,22 @@ export default function DebateRoom() {
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        setMyVote(null);
+        setMySide(prev);
         if (res.status === 401) setVoteError(t('room.signInToVote'));
         else setVoteError(data.error || t('room.couldNotVote'));
         return;
       }
       setVoteError('');
     } catch {
-      setMyVote(null);
+      setMySide(prev);
     }
   };
 
-  // Reset my pick when a new voting window opens.
+  // Reset my pick when a new match begins (not every window — the side is sticky).
   useEffect(() => {
-    setMyVote(null);
+    setMySide(null);
     setVoteError('');
-  }, [serverState.voteWindowEndsAt]);
+  }, [serverState.matchId]);
 
   const sendReaction = (type: string) =>
     socketRef.current?.emit('send_reaction', { type });
@@ -494,6 +509,22 @@ export default function DebateRoom() {
 
   const labelA = serverState.labelA || 'Red';
   const labelB = serverState.labelB || 'Blue';
+
+  // Three-way support bar: red (A), blue (B), gray (undecided viewers).
+  // Shares from the backend are normalized to actual voters; we spread them over all
+  // viewers so the remainder reads as "undecided" (gray).
+  const voters = serverState.voteVoters ?? 0;
+  const aVotes = Math.round((serverState.voteShareA ?? 0.5) * voters);
+  const bVotes = Math.max(0, voters - aVotes);
+  const barTotal = Math.max(serverState.viewersCount ?? 0, voters, 1);
+  const redPct = Math.round((aVotes / barTotal) * 100);
+  const bluePct = Math.round((bVotes / barTotal) * 100);
+  const grayPct = Math.max(0, 100 - redPct - bluePct);
+  // Nudge the vote buttons in the last 5s of a round to prompt people to vote.
+  const voteNudge =
+    (serverState.phase === 'round' || serverState.phase === 'rageRound') &&
+    serverState.timeLeft <= 5 &&
+    serverState.timeLeft > 0;
 
   if (!token)
     return (
@@ -620,15 +651,14 @@ export default function DebateRoom() {
               <div className="absolute bottom-3 left-1/2 -translate-x-1/2 w-[min(92%,440px)] z-20">
                 <div className="bg-black/55 backdrop-blur rounded-xl p-2.5">
                   <div className="flex items-center justify-between text-[11px] font-semibold mb-1.5">
-                    <span className="text-sidea-light">{labelA} {Math.round((serverState.voteShareA ?? 0.5) * 100)}%</span>
-                    <span className="text-fg-faint text-[10px]">{t('room.persuasion')}</span>
-                    <span className="text-sideb-light">{Math.round((serverState.voteShareB ?? 0.5) * 100)}% {labelB}</span>
+                    <span className="text-sidea-light">{labelA} {redPct}%</span>
+                    <span className="text-fg-faint text-[10px]">{grayPct}% {t('room.undecided')}</span>
+                    <span className="text-sideb-light">{bluePct}% {labelB}</span>
                   </div>
-                  <div className="h-2.5 rounded-full overflow-hidden bg-sideb">
-                    <div
-                      className="h-full bg-sidea transition-all duration-700 ease-out"
-                      style={{ width: `${Math.round((serverState.voteShareA ?? 0.5) * 100)}%` }}
-                    />
+                  <div className="flex h-2.5 rounded-full overflow-hidden bg-white/10">
+                    <div className="h-full bg-sidea transition-all duration-700 ease-out" style={{ width: `${redPct}%` }} />
+                    <div className="h-full bg-white/20 transition-all duration-700 ease-out" style={{ width: `${grayPct}%` }} />
+                    <div className="h-full bg-sideb transition-all duration-700 ease-out" style={{ width: `${bluePct}%` }} />
                   </div>
 
                   {uiRole === 'viewer' && (
@@ -636,8 +666,8 @@ export default function DebateRoom() {
                       <div className="mt-2 flex items-center gap-2">
                         <button
                           onClick={() => castVote('A')}
-                          className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                            myVote === 'A'
+                          className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all ${voteNudge ? 'animate-vote-nudge' : ''} ${
+                            mySide === 'A'
                               ? 'bg-sidea text-brand-ink glow-sidea'
                               : 'bg-sidea/15 text-sidea-light border border-sidea/30 hover:bg-sidea/25'
                           }`}
@@ -646,8 +676,8 @@ export default function DebateRoom() {
                         </button>
                         <button
                           onClick={() => castVote('B')}
-                          className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                            myVote === 'B'
+                          className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all ${voteNudge ? 'animate-vote-nudge' : ''} ${
+                            mySide === 'B'
                               ? 'bg-sideb text-brand-ink glow-sideb'
                               : 'bg-sideb/15 text-sideb-light border border-sideb/30 hover:bg-sideb/25'
                           }`}
@@ -658,11 +688,11 @@ export default function DebateRoom() {
                       <div className="text-center text-[10px] mt-1 h-3.5">
                         {voteError ? (
                           <span className="text-rage-light">{voteError}</span>
-                        ) : serverState.voteWindowEndsAt ? (
-                          <span className="text-fg-faint">
-                            {t('room.nextWindow', { n: Math.max(0, Math.ceil((serverState.voteWindowEndsAt - Date.now()) / 1000)) })}
-                          </span>
-                        ) : null}
+                        ) : mySide ? (
+                          <span className="text-fg-faint">{t('room.backing', { side: mySide === 'A' ? labelA : labelB })}</span>
+                        ) : (
+                          <span className="text-fg-faint">{t('room.pickSide')}</span>
+                        )}
                       </div>
                     </>
                   )}
@@ -708,7 +738,13 @@ export default function DebateRoom() {
               </div>
             ) : (
               <div key={msg.id} className="text-[13px] break-words animate-fade-in leading-snug">
-                <span className="font-semibold text-sideb-light">{msg.user}</span>{' '}
+                <span
+                  className={`font-semibold ${
+                    msg.side === 'A' ? 'text-sidea-light' : msg.side === 'B' ? 'text-sideb-light' : 'text-fg-muted'
+                  }`}
+                >
+                  {msg.user}
+                </span>{' '}
                 <span className="text-fg/90">{msg.text}</span>
               </div>
             )
