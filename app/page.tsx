@@ -102,6 +102,7 @@ export default function Home() {
   const [data, setData] = useState<HomeData>({ categories: [], hotTopics: [], liveBattles: [] });
   const [interests, setInterests] = useState<Set<number>>(new Set());
   const [roomTab, setRoomTab] = useState<'live' | 'open'>('live');
+  const [roomTabTouched, setRoomTabTouched] = useState(false);
 
   const goCreate = () => router.push(user ? '/create' : '/login');
 
@@ -133,6 +134,16 @@ export default function Home() {
     const id = setInterval(fetchHome, 4000);
     return () => clearInterval(id);
   }, [locale]);
+
+  // Default the debates tab to whatever has content: live first, else waiting.
+  // Stops auto-switching once the user picks a tab manually.
+  useEffect(() => {
+    if (roomTabTouched) return;
+    const hasLive = data.liveBattles.some((b) => b.isLive);
+    const hasOpen = data.liveBattles.some((b) => b.isOpen);
+    if (hasLive) setRoomTab('live');
+    else if (hasOpen) setRoomTab('open');
+  }, [data.liveBattles, roomTabTouched]);
 
   return (
     <div className="min-h-screen bg-ink text-fg font-sans selection:bg-brand/30 overflow-x-hidden">
@@ -188,48 +199,7 @@ export default function Home() {
 
       <div className="px-6 pb-20">
         <div className="max-w-5xl mx-auto space-y-12">
-          {/* Upcoming scheduled battles — shown when nothing is live right now */}
-          {(() => {
-            const live = data.liveBattles.filter((b) => b.isLive);
-            const scheduled = data.scheduledBattles || [];
-            if (live.length > 0 || scheduled.length === 0) return null;
-            return (
-              <section>
-                <div className="flex items-center gap-2 mb-4">
-                  <Clock className="text-brand-light" size={18} />
-                  <h2 className="text-lg font-semibold">{t('sched.upcoming')}</h2>
-                </div>
-                <div className="space-y-2">
-                  {scheduled.map((s) => {
-                    const isLive = s.status === 'live' && !!s.matchId;
-                    return (
-                      <div
-                        key={s.id}
-                        onClick={isLive ? () => router.push(`/room/${s.matchId}`) : undefined}
-                        className={`flex items-center gap-3 bg-panel border border-white/[0.07] rounded-xl px-3.5 py-3 ${isLive ? 'cursor-pointer hover:border-brand/50 transition-all hover:-translate-y-0.5' : ''}`}
-                      >
-                        <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-md whitespace-nowrap ${isLive ? 'text-brand-ink bg-brand glow-brand' : 'text-brand-light bg-brand/[0.12]'}`}>
-                          {isLive ? (
-                            <><span className="w-1.5 h-1.5 rounded-full bg-brand-ink" /> {t('lobby.liveNow')}</>
-                          ) : (
-                            <><Clock size={12} /> {t('sched.label')} {formatRelative(s.scheduledAt, locale)}</>
-                          )}
-                        </span>
-                        <span className="flex-1 text-sm font-medium truncate">{s.topic}</span>
-                        <span className="hidden sm:inline-flex items-center gap-1.5 text-[11px] whitespace-nowrap">
-                          <span className="text-sidea-light font-semibold">{s.labelA}</span>
-                          <span className="text-fg-faint font-bold">VS</span>
-                          <span className="text-sideb-light font-semibold">{s.labelB}</span>
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </section>
-            );
-          })()}
-
-          {/* Debates: Live / Waiting toggle */}
+          {/* Debates: Live / Waiting toggle — live first, waiting second (priority over scheduled) */}
           {data.liveBattles.length > 0 && (() => {
             const live = data.liveBattles.filter((b) => b.isLive);
             const open = data.liveBattles.filter((b) => b.isOpen);
@@ -240,7 +210,7 @@ export default function Home() {
                   <h2 className="text-lg font-semibold">{t('forum.debates')}</h2>
                   <div className="inline-flex items-center gap-0.5 bg-panel border border-white/10 rounded-lg p-0.5">
                     <button
-                      onClick={() => setRoomTab('live')}
+                      onClick={() => { setRoomTabTouched(true); setRoomTab('live'); }}
                       className={`inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
                         roomTab === 'live' ? 'bg-brand text-brand-ink' : 'text-fg-muted hover:text-fg'
                       }`}
@@ -249,7 +219,7 @@ export default function Home() {
                       {t('forum.tabLive')} {live.length > 0 && `· ${live.length}`}
                     </button>
                     <button
-                      onClick={() => setRoomTab('open')}
+                      onClick={() => { setRoomTabTouched(true); setRoomTab('open'); }}
                       className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
                         roomTab === 'open' ? 'bg-brand text-brand-ink' : 'text-fg-muted hover:text-fg'
                       }`}
@@ -295,6 +265,48 @@ export default function Home() {
                     ))}
                   </div>
                 )}
+              </section>
+            );
+          })()}
+
+          {/* Upcoming scheduled battles — only when no live AND no waiting battles right now */}
+          {(() => {
+            const live = data.liveBattles.filter((b) => b.isLive);
+            const open = data.liveBattles.filter((b) => b.isOpen);
+            const scheduled = data.scheduledBattles || [];
+            if (live.length > 0 || open.length > 0 || scheduled.length === 0) return null;
+            return (
+              <section>
+                <div className="flex items-center gap-2 mb-4">
+                  <Clock className="text-brand-light" size={18} />
+                  <h2 className="text-lg font-semibold">{t('sched.upcoming')}</h2>
+                </div>
+                <div className="space-y-2">
+                  {scheduled.map((s) => {
+                    const isLive = s.status === 'live' && !!s.matchId;
+                    return (
+                      <div
+                        key={s.id}
+                        onClick={isLive ? () => router.push(`/room/${s.matchId}`) : undefined}
+                        className={`flex items-center gap-3 bg-panel border border-white/[0.07] rounded-xl px-3.5 py-3 ${isLive ? 'cursor-pointer hover:border-brand/50 transition-all hover:-translate-y-0.5' : ''}`}
+                      >
+                        <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-md whitespace-nowrap ${isLive ? 'text-brand-ink bg-brand glow-brand' : 'text-brand-light bg-brand/[0.12]'}`}>
+                          {isLive ? (
+                            <><span className="w-1.5 h-1.5 rounded-full bg-brand-ink" /> {t('lobby.liveNow')}</>
+                          ) : (
+                            <><Clock size={12} /> {t('sched.label')} {formatRelative(s.scheduledAt, locale)}</>
+                          )}
+                        </span>
+                        <span className="flex-1 text-sm font-medium truncate">{s.topic}</span>
+                        <span className="hidden sm:inline-flex items-center gap-1.5 text-[11px] whitespace-nowrap">
+                          <span className="text-sidea-light font-semibold">{s.labelA}</span>
+                          <span className="text-fg-faint font-bold">VS</span>
+                          <span className="text-sideb-light font-semibold">{s.labelB}</span>
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
               </section>
             );
           })()}
