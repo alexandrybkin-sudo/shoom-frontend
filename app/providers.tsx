@@ -8,6 +8,7 @@ export interface User {
   display_name: string;
   avatar_url: string | null;
   username: string | null;
+  bio?: string | null;
 }
 
 export function apiUrl() {
@@ -15,6 +16,12 @@ export function apiUrl() {
   return window.location.hostname === 'localhost'
     ? 'http://localhost:3001'
     : 'https://shoom.fun';
+}
+
+// Avatars are stored as a backend-relative path (/api/uploads/...); make an absolute src.
+export function avatarSrc(path?: string | null): string | null {
+  if (!path) return null;
+  return /^https?:\/\//.test(path) ? path : `${apiUrl()}${path}`;
 }
 
 interface AuthCtx {
