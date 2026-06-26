@@ -23,6 +23,7 @@ interface Post {
   body: string;
   createdAt: string;
   author: string;
+  authorHandle: string | null;
   avatar: string | null;
 }
 
@@ -204,9 +205,18 @@ export default function TopicPage() {
                     }`}
                   >
                     <div className="flex items-center gap-2 mb-1.5">
-                      <span className={`text-[11px] font-semibold ${p.side === 'A' ? 'text-sidea-light' : 'text-sideb-light'}`}>
-                        {p.author}
-                      </span>
+                      {p.authorHandle ? (
+                        <button
+                          onClick={() => router.push(`/u/${p.authorHandle}`)}
+                          className={`text-[11px] font-semibold hover:underline ${p.side === 'A' ? 'text-sidea-light' : 'text-sideb-light'}`}
+                        >
+                          {p.author}
+                        </button>
+                      ) : (
+                        <span className={`text-[11px] font-semibold ${p.side === 'A' ? 'text-sidea-light' : 'text-sideb-light'}`}>
+                          {p.author}
+                        </span>
+                      )}
                       <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${p.side === 'A' ? 'bg-sidea/15 text-sidea-light' : 'bg-sideb/15 text-sideb-light'}`}>
                         {p.side === 'A' ? topic.sideA : topic.sideB}
                       </span>

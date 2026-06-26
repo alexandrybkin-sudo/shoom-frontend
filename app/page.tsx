@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { Zap, Eye, Plus, Flame, LogOut, MessageCircle, Users, Swords, Clock } from 'lucide-react';
-import { useAuth, apiUrl } from './providers';
+import { Zap, Eye, Plus, Flame, LogOut, MessageCircle, Users, Swords, Clock, Settings } from 'lucide-react';
+import { useAuth, apiUrl, avatarSrc } from './providers';
 import { useT, LanguageSwitcher } from './i18n';
 import { CategoryIcon } from './components/CategoryIcon';
 
@@ -154,20 +154,27 @@ export default function Home() {
           <LanguageSwitcher />
           {loading ? null : user ? (
             <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2">
-                {user.avatar_url ? (
+              <button
+                onClick={() => user.username && router.push(`/u/${user.username}`)}
+                className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+                aria-label={t('nav.profile')}
+              >
+                {avatarSrc(user.avatar_url) ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={user.avatar_url} alt="" className="w-7 h-7 rounded-full object-cover" />
+                  <img src={avatarSrc(user.avatar_url)!} alt="" className="w-7 h-7 rounded-full object-cover" />
                 ) : (
                   <div className="w-7 h-7 rounded-full bg-brand/20 text-brand-light flex items-center justify-center text-xs font-semibold">
                     {user.display_name.charAt(0).toUpperCase()}
                   </div>
                 )}
-                <div className="hidden sm:flex flex-col leading-tight">
+                <div className="hidden sm:flex flex-col leading-tight text-left">
                   <span className="text-sm font-medium max-w-[140px] truncate">{user.display_name}</span>
                   {user.username && <span className="text-[11px] text-fg-faint max-w-[140px] truncate">@{user.username}</span>}
                 </div>
-              </div>
+              </button>
+              <button onClick={() => router.push('/settings')} aria-label={t('nav.settings')} className="text-fg-muted hover:text-fg transition-colors">
+                <Settings size={17} />
+              </button>
               <button onClick={logout} aria-label={t('nav.logout')} className="text-fg-muted hover:text-fg transition-colors">
                 <LogOut size={17} />
               </button>
