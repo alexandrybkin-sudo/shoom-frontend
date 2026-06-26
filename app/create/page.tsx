@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Plus } from 'lucide-react';
+import { ArrowLeft, Plus, Clock } from 'lucide-react';
 import { useAuth } from '../providers';
 import { useT } from '../i18n';
 
@@ -36,6 +36,8 @@ export default function CreateRoom() {
   const [labelB, setLabelB] = useState('');
   const [roundsCount, setRoundsCount] = useState(2);
   const [roundDuration, setRoundDuration] = useState(90);
+  const [scheduleMode, setScheduleMode] = useState(false);
+  const [scheduledAt, setScheduledAt] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -92,6 +94,41 @@ export default function CreateRoom() {
 
       router.push(`/room/${roomId}`);
     } catch (err) {
+      setError(t('create.errGeneric'));
+      setLoading(false);
+    }
+  };
+
+  const handleSchedule = async () => {
+    if (!topic.trim()) {
+      setError(t('create.errEmptyTopic'));
+      return;
+    }
+    const when = new Date(scheduledAt);
+    if (!scheduledAt || isNaN(when.getTime()) || when.getTime() <= Date.now()) {
+      setError(t('create.when'));
+      return;
+    }
+    setLoading(true);
+    setError('');
+    try {
+      const res = await fetch(`${getApiUrl()}/api/forum/schedules`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          topic: topic.trim(),
+          labelA: labelA.trim() || 'Red',
+          labelB: labelB.trim() || 'Blue',
+          rounds: roundsCount,
+          roundDuration,
+          scheduledAt: when.toISOString(),
+          proposerSide: 'A',
+        }),
+      });
+      if (!res.ok) throw new Error('schedule failed');
+      router.push('/');
+    } catch {
       setError(t('create.errGeneric'));
       setLoading(false);
     }
@@ -208,6 +245,36 @@ export default function CreateRoom() {
             </div>
           </div>
 
+          {/* Now vs schedule */}
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setScheduleMode(false)}
+              className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-colors ${!scheduleMode ? 'bg-brand text-brand-ink' : 'bg-panel text-fg-muted border border-white/10'}`}
+            >
+              {t('create.startNow')}
+            </button>
+            <button
+              type="button"
+              onClick={() => setScheduleMode(true)}
+              className={`flex-1 inline-flex items-center justify-center gap-1.5 py-2 text-xs font-semibold rounded-lg transition-colors ${scheduleMode ? 'bg-brand text-brand-ink' : 'bg-panel text-fg-muted border border-white/10'}`}
+            >
+              <Clock size={14} /> {t('create.scheduleLater')}
+            </button>
+          </div>
+
+          {scheduleMode && (
+            <div>
+              <label className={labelCls}>{t('create.when')}</label>
+              <input
+                type="datetime-local"
+                value={scheduledAt}
+                onChange={(e) => setScheduledAt(e.target.value)}
+                className={`${inputCls} [color-scheme:dark]`}
+              />
+            </div>
+          )}
+
           {error && (
             <div className="text-sidea-light text-sm text-center font-medium bg-sidea/10 py-2.5 rounded-lg">
               {error}
@@ -215,11 +282,11 @@ export default function CreateRoom() {
           )}
 
           <button
-            onClick={handleCreate}
+            onClick={scheduleMode ? handleSchedule : handleCreate}
             disabled={loading}
             className="w-full inline-flex items-center justify-center gap-2 bg-brand hover:scale-[1.02] active:scale-[0.99] disabled:bg-panel disabled:text-fg-faint disabled:scale-100 text-brand-ink font-semibold py-3.5 rounded-xl transition-all glow-brand disabled:shadow-none"
           >
-            {loading ? t('create.creating') : (<>{t('create.createRoom')} <Plus size={18} /></>)}
+            {loading ? t('create.creating') : scheduleMode ? (<><Clock size={18} /> {t('create.scheduleLater')}</>) : (<>{t('create.createRoom')} <Plus size={18} /></>)}
           </button>
         </div>
       </div>

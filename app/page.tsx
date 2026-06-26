@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { Zap, Eye, Plus, Flame, LogOut, MessageCircle, Users, Swords } from 'lucide-react';
+import { Zap, Eye, Plus, Flame, LogOut, MessageCircle, Users, Swords, Clock } from 'lucide-react';
 import { useAuth, apiUrl } from './providers';
 import { useT, LanguageSwitcher } from './i18n';
 import { CategoryIcon } from './components/CategoryIcon';
@@ -31,10 +31,28 @@ interface LiveBattle {
   isOpen: boolean;
   isLive: boolean;
 }
+interface ScheduledBattle {
+  id: number;
+  topic: string;
+  labelA: string;
+  labelB: string;
+  scheduledAt: string;
+}
 interface HomeData {
   categories: CategoryRow[];
   hotTopics: HotTopic[];
   liveBattles: LiveBattle[];
+  scheduledBattles?: ScheduledBattle[];
+}
+
+function formatRelative(iso: string, locale: string): string {
+  const diff = new Date(iso).getTime() - Date.now();
+  const rtf = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' });
+  const mins = Math.round(diff / 60000);
+  if (Math.abs(mins) < 60) return rtf.format(mins, 'minute');
+  const hours = Math.round(diff / 3600000);
+  if (Math.abs(hours) < 24) return rtf.format(hours, 'hour');
+  return rtf.format(Math.round(diff / 86400000), 'day');
 }
 
 // 🐣 Easter egg: hover the logo for 3s and a tiny knight peeks out from behind it.
@@ -168,6 +186,36 @@ export default function Home() {
 
       <div className="px-6 pb-20">
         <div className="max-w-5xl mx-auto space-y-12">
+          {/* Upcoming scheduled battles — shown when nothing is live right now */}
+          {(() => {
+            const live = data.liveBattles.filter((b) => b.isLive);
+            const scheduled = data.scheduledBattles || [];
+            if (live.length > 0 || scheduled.length === 0) return null;
+            return (
+              <section>
+                <div className="flex items-center gap-2 mb-4">
+                  <Clock className="text-brand-light" size={18} />
+                  <h2 className="text-lg font-semibold">{t('sched.upcoming')}</h2>
+                </div>
+                <div className="space-y-2">
+                  {scheduled.map((s) => (
+                    <div key={s.id} className="flex items-center gap-3 bg-panel border border-white/[0.07] rounded-xl px-3.5 py-3">
+                      <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-brand-light bg-brand/[0.12] px-2 py-1 rounded-md whitespace-nowrap">
+                        <Clock size={12} /> {t('sched.label')} {formatRelative(s.scheduledAt, locale)}
+                      </span>
+                      <span className="flex-1 text-sm font-medium truncate">{s.topic}</span>
+                      <span className="hidden sm:inline-flex items-center gap-1.5 text-[11px] whitespace-nowrap">
+                        <span className="text-sidea-light font-semibold">{s.labelA}</span>
+                        <span className="text-fg-faint font-bold">VS</span>
+                        <span className="text-sideb-light font-semibold">{s.labelB}</span>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            );
+          })()}
+
           {/* Debates: Live / Waiting toggle */}
           {data.liveBattles.length > 0 && (() => {
             const live = data.liveBattles.filter((b) => b.isLive);
