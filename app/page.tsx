@@ -37,6 +37,8 @@ interface ScheduledBattle {
   labelA: string;
   labelB: string;
   scheduledAt: string;
+  status: string;
+  matchId?: string | null;
 }
 interface HomeData {
   categories: CategoryRow[];
@@ -198,19 +200,30 @@ export default function Home() {
                   <h2 className="text-lg font-semibold">{t('sched.upcoming')}</h2>
                 </div>
                 <div className="space-y-2">
-                  {scheduled.map((s) => (
-                    <div key={s.id} className="flex items-center gap-3 bg-panel border border-white/[0.07] rounded-xl px-3.5 py-3">
-                      <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-brand-light bg-brand/[0.12] px-2 py-1 rounded-md whitespace-nowrap">
-                        <Clock size={12} /> {t('sched.label')} {formatRelative(s.scheduledAt, locale)}
-                      </span>
-                      <span className="flex-1 text-sm font-medium truncate">{s.topic}</span>
-                      <span className="hidden sm:inline-flex items-center gap-1.5 text-[11px] whitespace-nowrap">
-                        <span className="text-sidea-light font-semibold">{s.labelA}</span>
-                        <span className="text-fg-faint font-bold">VS</span>
-                        <span className="text-sideb-light font-semibold">{s.labelB}</span>
-                      </span>
-                    </div>
-                  ))}
+                  {scheduled.map((s) => {
+                    const isLive = s.status === 'live' && !!s.matchId;
+                    return (
+                      <div
+                        key={s.id}
+                        onClick={isLive ? () => router.push(`/room/${s.matchId}`) : undefined}
+                        className={`flex items-center gap-3 bg-panel border border-white/[0.07] rounded-xl px-3.5 py-3 ${isLive ? 'cursor-pointer hover:border-brand/50 transition-all hover:-translate-y-0.5' : ''}`}
+                      >
+                        <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-md whitespace-nowrap ${isLive ? 'text-brand-ink bg-brand glow-brand' : 'text-brand-light bg-brand/[0.12]'}`}>
+                          {isLive ? (
+                            <><span className="w-1.5 h-1.5 rounded-full bg-brand-ink" /> {t('lobby.liveNow')}</>
+                          ) : (
+                            <><Clock size={12} /> {t('sched.label')} {formatRelative(s.scheduledAt, locale)}</>
+                          )}
+                        </span>
+                        <span className="flex-1 text-sm font-medium truncate">{s.topic}</span>
+                        <span className="hidden sm:inline-flex items-center gap-1.5 text-[11px] whitespace-nowrap">
+                          <span className="text-sidea-light font-semibold">{s.labelA}</span>
+                          <span className="text-fg-faint font-bold">VS</span>
+                          <span className="text-sideb-light font-semibold">{s.labelB}</span>
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
               </section>
             );
