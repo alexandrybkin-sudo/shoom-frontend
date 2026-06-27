@@ -28,6 +28,8 @@ interface MatchRow {
   opponent: string | null;
   opponentHandle: string | null;
 }
+interface OpinionTopic { slug: string; title: string; category: string; side: 'A' | 'B'; strength: number; conviction: number; }
+interface OpinionMap { topics?: OpinionTopic[]; forPct?: number; total: number; hidden?: boolean; }
 interface ProfileData {
   id: string;
   handle: string;
@@ -45,6 +47,7 @@ interface ProfileData {
   debaterStats: DebaterStats;
   viewerStats: ViewerStats;
   matchHistory: MatchRow[];
+  opinionMap: OpinionMap;
 }
 
 // A section placeholder for stats/maps/badges that light up in later blocks.
@@ -167,6 +170,127 @@ function MatchHistorySection({ d, locale, onOpen }: { d: ProfileData; locale: st
   );
 }
 
+// "Force field" opinion map: two neon poles (For / Against), threads pulled toward
+// their pole by conviction, bubble size = activity. Rendered as JSX SVG so nodes click.
+const OM_RED = '#FF4D4D', OM_BLUE = '#4F8DFF', OM_PUR = '#A06BFF';
+function ForceField({ topics, forPct, onPick }: { topics: OpinionTopic[]; forPct: number; onPick: (slug: string) => void }) {
+  const { t } = useT();
+  const W = 560, H = 380, leftX = 66, rightX = W - 66, midY = 170;
+  const maxW = Math.max(1, ...topics.map((x) => x.strength));
+  const col = (s: 'A' | 'B') => (s === 'A' ? OM_RED : OM_BLUE);
+  const ys = (n: number) => Array.from({ length: n }, (_, i) => 56 + 250 * (n <= 1 ? 0.5 : i / (n - 1)));
+  const place = (arr: OpinionTopic[], side: 'A' | 'B') => {
+    const slots = ys(arr.length);
+    const dy = side === 'B' ? 28 : 0; // stagger the two sides so labels never collide
+    return arr.map((top, i) => {
+      const dist = 110 + (1 - top.conviction) * 150;
+      return { top, x: side === 'A' ? leftX + dist : rightX - dist, y: slots[i] + dy, r: 9 + (top.strength / maxW) * 15 };
+    });
+  };
+  const nodes = [...place(topics.filter((x) => x.side === 'A').slice(0, 6), 'A'),
+                 ...place(topics.filter((x) => x.side === 'B').slice(0, 6), 'B')];
+  const comX = leftX + (1 - forPct / 100) * (rightX - leftX);
+  const short = (s: string) => (s.length > 22 ? s.slice(0, 21) + '…' : s);
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" role="img" aria-label={t('profile.opinionMap')}>
+      <defs>
+        <filter id="omglow" x="-60%" y="-60%" width="220%" height="220%">
+          <feGaussianBlur stdDeviation="4.5" result="b" /><feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+        </filter>
+        <radialGradient id="omRed"><stop offset="0%" stopColor={OM_RED} stopOpacity="0.85" /><stop offset="100%" stopColor={OM_RED} stopOpacity="0" /></radialGradient>
+        <radialGradient id="omBlue"><stop offset="0%" stopColor={OM_BLUE} stopOpacity="0.85" /><stop offset="100%" stopColor={OM_BLUE} stopOpacity="0" /></radialGradient>
+      </defs>
+      <circle cx={leftX} cy={midY} r="92" fill="url(#omRed)" className="om-glow" />
+      <circle cx={rightX} cy={midY} r="92" fill="url(#omBlue)" className="om-glow" />
+      {nodes.map((n, i) => (
+        <line key={'l' + i} x1={n.top.side === 'A' ? leftX : rightX} y1={midY} x2={n.x} y2={n.y} stroke={col(n.top.side)} strokeOpacity="0.28" strokeWidth="1.2" />
+      ))}
+      <circle cx={leftX} cy={midY} r="26" fill={OM_RED} filter="url(#omglow)" className="om-breathe" />
+      <circle cx={rightX} cy={midY} r="26" fill={OM_BLUE} filter="url(#omglow)" className="om-breathe" />
+      <text x={leftX} y={midY} dy="5" textAnchor="middle" fontSize="14" fill="#fff">{t('opinion.for')}</text>
+      <text x={rightX} y={midY} dy="5" textAnchor="middle" fontSize="13" fill="#fff">{t('opinion.against')}</text>
+      {nodes.map((n, i) => (
+        <g key={i} className="om-float" style={{ animationDelay: `${i * 0.35}s`, cursor: 'pointer' }} onClick={() => onPick(n.top.slug)}>
+          <circle cx={n.x} cy={n.y} r={n.r} fill={col(n.top.side) + '22'} stroke={col(n.top.side)} strokeWidth="1.5" filter="url(#omglow)" />
+          <circle cx={n.x} cy={n.y} r={n.r * 0.3} fill={col(n.top.side)} />
+          <text x={n.x} y={n.y - n.r - 5} textAnchor="middle" fontSize="9.5" fill="#cfd3e0">{short(n.top.title)}</text>
+        </g>
+      ))}
+      <rect x={leftX} y={H - 34} width={rightX - leftX} height="5" rx="2.5" fill="rgba(255,255,255,0.1)" />
+      <circle cx={comX} cy={H - 31.5} r="6" fill={OM_PUR} filter="url(#omglow)" />
+      <text x={W / 2} y={H - 12} textAnchor="middle" fontSize="10" fill="#8a8fa3">{t('opinion.centerOfMass')}</text>
+    </svg>
+  );
+}
+
+function OpinionMapModal({ d, onClose, onPick }: { d: ProfileData; onClose: () => void; onPick: (slug: string) => void }) {
+  const { t } = useT();
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+  }, [onClose]);
+  const om = d.opinionMap;
+  const topics = om.topics || [];
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="relative w-full max-w-xl rounded-2xl bg-[#12141d] border border-brand/40 p-4 animate-om-pop"
+        style={{ boxShadow: '0 24px 70px rgba(0,0,0,.6), 0 0 40px rgba(160,107,255,.12)' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center gap-2 mb-1">
+          <h2 className="text-sm font-semibold">{t('profile.opinionMap')}</h2>
+          <span className="text-[11px] text-fg-faint">@{d.handle} · {t('opinion.leanFor', { pct: om.forPct ?? 50 })}</span>
+          <button onClick={onClose} aria-label="close" className="ml-auto text-fg-muted hover:text-fg text-lg leading-none">✕</button>
+        </div>
+        {topics.length === 0 ? (
+          <p className="text-xs text-fg-faint py-10 text-center">{t('opinion.empty')}</p>
+        ) : (
+          <ForceField topics={topics} forPct={om.forPct ?? 50} onPick={onPick} />
+        )}
+        <div className="flex items-center justify-center gap-4 text-[11px] text-fg-faint mt-1">
+          <span><span className="inline-block w-2 h-2 rounded-full mr-1 align-middle" style={{ background: OM_RED }} />{t('opinion.for')}</span>
+          <span><span className="inline-block w-2 h-2 rounded-full mr-1 align-middle" style={{ background: OM_BLUE }} />{t('opinion.against')}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function OpinionMapSection({ d, onOpen }: { d: ProfileData; onOpen: () => void }) {
+  const { t } = useT();
+  const om = d.opinionMap;
+  return (
+    <section>
+      <div className="flex items-center gap-2 mb-3">
+        <MapIcon size={16} className="text-brand-light" />
+        <h2 className="text-sm font-semibold">{t('profile.opinionMap')}</h2>
+      </div>
+      {om.hidden ? (
+        <p className="text-xs text-fg-faint">{t('opinion.hiddenByUser')}</p>
+      ) : om.total === 0 ? (
+        <p className="text-xs text-fg-faint">{t('opinion.empty')}</p>
+      ) : (
+        <button
+          onClick={onOpen}
+          className="w-full flex items-center gap-3 rounded-2xl border border-brand/30 bg-panel hover:border-brand/60 hover:-translate-y-0.5 transition-all p-4 text-left"
+        >
+          <span className="relative flex items-center">
+            <span className="w-3 h-3 rounded-full" style={{ background: OM_RED, boxShadow: `0 0 10px ${OM_RED}` }} />
+            <span className="w-3 h-3 rounded-full -ml-1" style={{ background: OM_BLUE, boxShadow: `0 0 10px ${OM_BLUE}` }} />
+          </span>
+          <span className="flex-1 min-w-0">
+            <span className="block text-sm font-medium">{t('opinion.openCta')}</span>
+            <span className="block text-[11px] text-fg-faint">{t('opinion.summary', { pct: om.forPct ?? 50, n: om.total })}</span>
+          </span>
+          <span className="text-brand-light">→</span>
+        </button>
+      )}
+    </section>
+  );
+}
+
 export default function ProfilePage() {
   const { t, locale } = useT();
   const router = useRouter();
@@ -178,6 +302,7 @@ export default function ProfilePage() {
   const [state, setState] = useState<'loading' | 'ready' | 'notfound'>('loading');
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [mapOpen, setMapOpen] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -357,13 +482,23 @@ export default function ProfilePage() {
         <StatsSection d={data} />
         <MatchHistorySection d={data} locale={locale} onOpen={(h) => router.push(`/u/${h}`)} />
 
+        {/* Opinion map — live "force field" popup */}
+        <OpinionMapSection d={data} onOpen={() => setMapOpen(true)} />
+
         {/* Skeleton sections — light up in later blocks */}
-        <SoonSection icon={<MapIcon size={15} />} title={t('profile.opinionMap')} desc={t('profile.opinionMapDesc')} />
         <SoonSection icon={<Award size={15} />} title={t('profile.badges')} desc={t('profile.badgesDesc')} />
         {data.isSelf && (
           <SoonSection icon={<Lock size={15} />} title={t('profile.privatePanel')} desc={t('profile.privatePanelDesc')} />
         )}
       </div>
+
+      {mapOpen && (
+        <OpinionMapModal
+          d={data}
+          onClose={() => setMapOpen(false)}
+          onPick={(slug) => { setMapOpen(false); router.push(`/t/${slug}`); }}
+        />
+      )}
     </div>
   );
 }

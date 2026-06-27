@@ -54,10 +54,21 @@ body {
   0%, 100% { transform: scale(1); }
   50% { transform: scale(1.09); }
 }
+@keyframes om-breathe { 0%,100% { transform: scale(1); } 50% { transform: scale(1.13); } }
+@keyframes om-pulse { 0%,100% { opacity: .5; } 50% { opacity: 1; } }
+@keyframes om-float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+@keyframes om-pop { from { opacity: 0; transform: scale(.94); } to { opacity: 1; transform: scale(1); } }
 .animate-float-up { animation: float-up 1.6s ease-out forwards; }
 .animate-fade-in { animation: fade-in 0.2s ease-out forwards; }
 .animate-knight-bob { animation: knight-bob 1.8s ease-in-out infinite; }
 .animate-vote-nudge { animation: vote-nudge 0.6s ease-in-out infinite; }
+.om-breathe { transform-box: fill-box; transform-origin: center; animation: om-breathe 4s ease-in-out infinite; }
+.om-glow { animation: om-pulse 3.4s ease-in-out infinite; }
+.om-float { animation: om-float 5s ease-in-out infinite; }
+.animate-om-pop { animation: om-pop .22s ease-out forwards; }
+@media (prefers-reduced-motion: reduce) {
+  .om-breathe, .om-glow, .om-float { animation: none; }
+}
 
 /* subtle scrollbar */
 .scrollbar-thin::-webkit-scrollbar { width: 6px; }
