@@ -4,13 +4,30 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   Users, Settings, Share2, UserPlus, UserMinus, Clock,
-  BarChart3, Award, Map as MapIcon, Lock, MessageCircle, ArrowLeft,
+  BarChart3, Award, Map as MapIcon, Lock, MessageCircle, ArrowLeft, Swords, Eye,
 } from 'lucide-react';
 import { useAuth, apiUrl, avatarSrc } from '../../providers';
 import { useT } from '../../i18n';
 import { CategoryIcon } from '../../components/CategoryIcon';
 
 interface Camp { slug: string; title: string; side: 'A' | 'B'; category: string; }
+interface DebaterStats { battles: number; wins: number; losses: number; ties: number; winRate: number; }
+interface ViewerStats { votedMatches: number; predictions: number; correct: number; accuracy: number; }
+interface MatchRow {
+  matchId: string;
+  topic: string;
+  labelA: string;
+  labelB: string;
+  winnerSide: 'A' | 'B' | 'tie';
+  finalShareA: number;
+  finalShareB: number;
+  totalVoters: number;
+  endedAt: string;
+  mySide: 'A' | 'B';
+  result: 'win' | 'loss' | 'tie';
+  opponent: string | null;
+  opponentHandle: string | null;
+}
 interface ProfileData {
   id: string;
   handle: string;
@@ -25,6 +42,9 @@ interface ProfileData {
   isSelf: boolean;
   interests: string[];
   camps: Camp[];
+  debaterStats: DebaterStats;
+  viewerStats: ViewerStats;
+  matchHistory: MatchRow[];
 }
 
 // A section placeholder for stats/maps/badges that light up in later blocks.
@@ -40,6 +60,109 @@ function SoonSection({ icon, title, desc }: { icon: React.ReactNode; title: stri
         </span>
       </div>
       <p className="text-xs text-fg-faint leading-relaxed">{desc}</p>
+    </section>
+  );
+}
+
+function Stat({ value, label }: { value: string; label: string }) {
+  return (
+    <div className="text-center">
+      <div className="text-xl font-bold leading-none">{value}</div>
+      <div className="text-[10px] text-fg-faint mt-1 uppercase tracking-wide">{label}</div>
+    </div>
+  );
+}
+
+// Debater record + viewer prediction accuracy — both from existing data.
+function StatsSection({ d }: { d: ProfileData }) {
+  const { t } = useT();
+  const ds = d.debaterStats;
+  const vs = d.viewerStats;
+  return (
+    <section>
+      <div className="flex items-center gap-2 mb-3">
+        <BarChart3 size={16} className="text-brand-light" />
+        <h2 className="text-sm font-semibold">{t('profile.stats')}</h2>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="rounded-2xl border border-white/[0.07] bg-panel p-4">
+          <div className="flex items-center gap-1.5 text-xs text-fg-muted mb-3"><Swords size={13} /> {t('profile.asDebater')}</div>
+          {ds.battles > 0 ? (
+            <div className="flex items-center justify-around">
+              <Stat value={`${Math.round(ds.winRate * 100)}%`} label={t('profile.winRate')} />
+              <Stat value={String(ds.battles)} label={t('profile.battles')} />
+              <Stat value={`${ds.wins}–${ds.losses}${ds.ties ? `–${ds.ties}` : ''}`} label={t('profile.record')} />
+            </div>
+          ) : (
+            <p className="text-xs text-fg-faint">{t('profile.noBattlesYet')}</p>
+          )}
+        </div>
+        <div className="rounded-2xl border border-white/[0.07] bg-panel p-4">
+          <div className="flex items-center gap-1.5 text-xs text-fg-muted mb-3"><Eye size={13} /> {t('profile.asViewer')}</div>
+          {vs.predictions > 0 ? (
+            <div className="flex items-center justify-around">
+              <Stat value={`${Math.round(vs.accuracy * 100)}%`} label={t('profile.accuracy')} />
+              <Stat value={`${vs.correct}/${vs.predictions}`} label={t('profile.guessed')} />
+              <Stat value={String(vs.votedMatches)} label={t('profile.voted')} />
+            </div>
+          ) : (
+            <p className="text-xs text-fg-faint">{t('profile.noVotesYet')}</p>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function MatchHistorySection({ d, locale, onOpen }: { d: ProfileData; locale: string; onOpen: (h: string) => void }) {
+  const { t } = useT();
+  const fmt = (s: string) => new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short' }).format(new Date(s));
+  const badge = (r: MatchRow['result']) =>
+    r === 'win'
+      ? 'text-brand-ink bg-brand'
+      : r === 'tie'
+        ? 'text-fg-muted bg-white/10'
+        : 'text-fg-muted bg-white/5 border border-white/10';
+  return (
+    <section>
+      <div className="flex items-center gap-2 mb-3">
+        <Swords size={16} className="text-brand-light" />
+        <h2 className="text-sm font-semibold">{t('profile.matchHistory')}</h2>
+      </div>
+      {d.matchHistory.length === 0 ? (
+        <p className="text-xs text-fg-faint">{t('profile.noHistory')}</p>
+      ) : (
+        <div className="space-y-2">
+          {d.matchHistory.map((m) => {
+            const myShare = Math.round((m.mySide === 'A' ? m.finalShareA : m.finalShareB) * 100);
+            const myLabel = m.mySide === 'A' ? m.labelA : m.labelB;
+            return (
+              <div key={m.matchId} className="rounded-xl border border-white/[0.07] bg-panel px-3 py-2.5">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded ${badge(m.result)}`}>
+                    {t(`profile.result.${m.result}`)}
+                  </span>
+                  <span className="flex-1 text-sm font-medium truncate">{m.topic}</span>
+                  <span className="text-[11px] text-fg-faint whitespace-nowrap">{fmt(m.endedAt)}</span>
+                </div>
+                <div className="flex items-center gap-2 text-[11px] text-fg-muted">
+                  <span className={m.mySide === 'A' ? 'text-sidea-light' : 'text-sideb-light'}>{myLabel} {myShare}%</span>
+                  {m.opponent && (
+                    <span className="text-fg-faint">
+                      {t('profile.vs')}{' '}
+                      {m.opponentHandle ? (
+                        <button onClick={() => onOpen(m.opponentHandle!)} className="hover:underline">@{m.opponentHandle}</button>
+                      ) : (
+                        m.opponent
+                      )}
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </section>
   );
 }
@@ -230,10 +353,12 @@ export default function ProfilePage() {
           )}
         </section>
 
+        {/* Live stats from real data */}
+        <StatsSection d={data} />
+        <MatchHistorySection d={data} locale={locale} onOpen={(h) => router.push(`/u/${h}`)} />
+
         {/* Skeleton sections — light up in later blocks */}
         <SoonSection icon={<MapIcon size={15} />} title={t('profile.opinionMap')} desc={t('profile.opinionMapDesc')} />
-        <SoonSection icon={<BarChart3 size={15} />} title={t('profile.stats')} desc={t('profile.statsDesc')} />
-        <SoonSection icon={<Users size={15} />} title={t('profile.matchHistory')} desc={t('profile.matchHistoryDesc')} />
         <SoonSection icon={<Award size={15} />} title={t('profile.badges')} desc={t('profile.badgesDesc')} />
         {data.isSelf && (
           <SoonSection icon={<Lock size={15} />} title={t('profile.privatePanel')} desc={t('profile.privatePanelDesc')} />
