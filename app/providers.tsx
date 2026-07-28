@@ -18,6 +18,18 @@ export function apiUrl() {
     : 'https://shoom.fun';
 }
 
+// Maps a moderation rejection (422 + category codes from the backend) to an i18n
+// key. The model returns codes, never prose, so the wording stays localized.
+const MOD_CATEGORIES = [
+  'attack_person', 'hate_dehumanization', 'violence_incitement', 'sexual_minors',
+  'illegal_howto', 'self_harm_promotion', 'doxxing_pii', 'spam_scam',
+  'politics_restricted', 'legally_restricted', 'not_debatable',
+];
+export function moderationKey(categories?: string[]): string {
+  const c = categories?.[0];
+  return c && MOD_CATEGORIES.includes(c) ? `mod.${c}` : 'mod.default';
+}
+
 // Avatars are stored as a backend-relative path (/api/uploads/...); make an absolute src.
 export function avatarSrc(path?: string | null): string | null {
   if (!path) return null;
