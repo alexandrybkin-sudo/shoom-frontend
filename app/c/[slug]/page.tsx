@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { ArrowLeft, MessageCircle, Users, Swords, Eye, Plus, Bell, Check, X } from 'lucide-react';
-import { apiUrl, useAuth } from '../../providers';
+import { apiUrl, useAuth, moderationKey } from '../../providers';
 import { useT, LanguageSwitcher } from '../../i18n';
 import { CategoryIcon } from '../../components/CategoryIcon';
 
@@ -38,6 +38,7 @@ export default function CategoryPage() {
   const [sideA, setSideA] = useState('');
   const [sideB, setSideB] = useState('');
   const [creating, setCreating] = useState(false);
+  const [formError, setFormError] = useState('');
 
   const load = useCallback(() => {
     setLoaded(false);
@@ -81,6 +82,7 @@ export default function CategoryPage() {
     if (!user) { router.push('/login'); return; }
     if (!catId || !title.trim()) return;
     setCreating(true);
+    setFormError('');
     try {
       const r = await fetch(`${apiUrl()}/api/forum/topics`, {
         method: 'POST',
@@ -88,9 +90,14 @@ export default function CategoryPage() {
         credentials: 'include',
         body: JSON.stringify({ categoryId: catId, title: title.trim(), sideA: sideA.trim(), sideB: sideB.trim(), lang: locale }),
       });
-      if (r.ok) {
+      if (r.status === 422) {
+        const d = await r.json().catch(() => ({}));
+        setFormError(t(moderationKey(d.categories)));
+      } else if (r.ok) {
         setTitle(''); setSideA(''); setSideB(''); setFormOpen(false);
         load();
+      } else {
+        setFormError(t('mod.default'));
       }
     } finally {
       setCreating(false);
@@ -161,6 +168,7 @@ export default function CategoryPage() {
             >
               {creating ? '…' : (<>{t('forum.createThread')} <Plus size={16} /></>)}
             </button>
+            {formError && <p className="text-xs text-rage-light text-center">{formError}</p>}
           </div>
         )}
 

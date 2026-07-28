@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Plus, Clock } from 'lucide-react';
-import { useAuth } from '../providers';
+import { useAuth, moderationKey } from '../providers';
 import { useT } from '../i18n';
 
 function getApiUrl() {
@@ -67,6 +67,16 @@ export default function CreateRoom() {
           roundDuration,
         }),
       });
+      if (createRes.status === 401) {
+        router.replace('/login');
+        return;
+      }
+      if (createRes.status === 422) {
+        const d = await createRes.json().catch(() => ({}));
+        setError(t(moderationKey(d.categories)));
+        setLoading(false);
+        return;
+      }
       if (!createRes.ok) throw new Error(`create failed: ${createRes.status}`);
       const { roomId } = await createRes.json();
       if (!roomId) throw new Error('no roomId returned');
@@ -126,6 +136,12 @@ export default function CreateRoom() {
           proposerSide: 'A',
         }),
       });
+      if (res.status === 422) {
+        const d = await res.json().catch(() => ({}));
+        setError(t(moderationKey(d.categories)));
+        setLoading(false);
+        return;
+      }
       if (!res.ok) throw new Error('schedule failed');
       router.push('/');
     } catch {

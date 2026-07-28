@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { ArrowLeft, Swords, MessageCircle, Users, Send, Bell, Check } from 'lucide-react';
-import { useAuth, apiUrl } from '../../providers';
+import { useAuth, apiUrl, moderationKey } from '../../providers';
 import { useT, LanguageSwitcher } from '../../i18n';
 
 interface Topic {
@@ -50,6 +50,7 @@ export default function TopicPage() {
   const [body, setBody] = useState('');
   const [posting, setPosting] = useState(false);
   const [starting, setStarting] = useState(false);
+  const [battleError, setBattleError] = useState('');
   const [following, setFollowing] = useState(false);
 
   const load = useCallback(async () => {
@@ -130,7 +131,15 @@ export default function TopicPage() {
           topicId: topic.id,
         }),
       });
-      const { roomId } = await createRes.json();
+      if (createRes.status === 401) { router.push('/login'); return; }
+      const created = await createRes.json().catch(() => ({}));
+      const roomId = created.roomId;
+      // Don't navigate to /room/undefined when the battle was refused (e.g. moderation).
+      if (!createRes.ok || !roomId) {
+        setBattleError(createRes.status === 422 ? t(moderationKey(created.categories)) : t('mod.default'));
+        setStarting(false);
+        return;
+      }
       const identity = sessionIdentity(roomId);
       const joinRes = await fetch(`${apiUrl()}/api/rooms/${roomId}/join`, {
         method: 'POST',
@@ -191,6 +200,7 @@ export default function TopicPage() {
             >
               <Swords size={18} /> {t('topic.startBattle')}
             </button>
+            {battleError && <p className="text-xs text-rage-light text-center -mt-6 mb-8">{battleError}</p>}
 
             {/* Posts */}
             {posts.length === 0 ? (
