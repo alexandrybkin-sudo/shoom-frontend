@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { ArrowLeft, Swords, MessageCircle, Users, Send, Bell, Check } from 'lucide-react';
 import { useAuth, apiUrl, moderationKey } from '../../providers';
@@ -59,6 +59,16 @@ export default function TopicPage() {
   const [starting, setStarting] = useState(false);
   const [battleError, setBattleError] = useState('');
   const [following, setFollowing] = useState(false);
+  const replyRef = useRef<HTMLTextAreaElement | null>(null);
+
+  // The composer grows with the text (up to ~9 lines) instead of staying one row.
+  // Runs on every body change, so it also shrinks back after a successful post.
+  useEffect(() => {
+    const el = replyRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, 220)}px`;
+  }, [body]);
 
   const load = useCallback(async () => {
     try {
@@ -334,11 +344,12 @@ export default function TopicPage() {
                 </div>
                 <div className="flex items-end gap-2">
                   <textarea
+                    ref={replyRef}
                     value={body}
                     onChange={(e) => setBody(e.target.value)}
                     placeholder={t('topic.replyPlaceholder')}
                     rows={1}
-                    className="flex-1 bg-panel-2 border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-fg placeholder-fg-faint focus:outline-none focus:border-brand resize-none"
+                    className="flex-1 bg-panel-2 border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-fg placeholder-fg-faint focus:outline-none focus:border-brand resize-none overflow-y-auto"
                   />
                   <button
                     type="submit"
