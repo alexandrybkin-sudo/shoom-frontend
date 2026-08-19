@@ -19,14 +19,20 @@ import { useAuth } from '../../providers';
 type Phase = 'waiting' | 'coinflip' | 'round' | 'rageRound' | 'finished';
 type Role = 'viewer' | 'admin' | 'debater';
 
+type Stance = 'A' | 'B' | 'N';
 interface Message {
   id: string;
   user: string;
   text: string;
   isDonation: boolean;
   amount?: number;
-  side?: 'A' | 'B' | null;
+  side?: Stance | null;
+  kind?: 'msg' | 'side_change';
+  prevSide?: Stance | null;
 }
+// Ник красится по позиции: красный / синий / серый (нейтрально).
+const sideText = (s?: Stance | null) =>
+  s === 'A' ? 'text-sidea-light' : s === 'B' ? 'text-sideb-light' : 'text-fg-muted';
 
 interface FloatingEmoji {
   id: number;
@@ -307,7 +313,7 @@ export default function DebateRoom() {
   const [showVoteModal, setShowVoteModal] = useState(false);
   // The side the viewer is backing. Sticky across windows (colors their chat nick);
   // cleared only when a new match starts. null = undecided (gray).
-  const [mySide, setMySide] = useState<'A' | 'B' | null>(null);
+  const [mySide, setMySide] = useState<Stance | null>(null);
   const [voteError, setVoteError] = useState('');
   const [serverState, setServerState] = useState<ServerState>({
     phase: 'waiting',
@@ -447,7 +453,6 @@ export default function DebateRoom() {
       text,
       isDonation,
       amount,
-      side: mySide,
     });
   };
 
@@ -459,11 +464,23 @@ export default function DebateRoom() {
   };
 
   // Per-window vote: POST to the match; backend builds the live persuasion bar.
-  const castVote = async (side: 'A' | 'B') => {
+  // Declares the stance on the server: colours the nick and announces a switch
+  // in chat. Separate from the vote, which stays per-window.
+  const declarePosition = (next: Stance) => {
+    socketRef.current?.emit('set_position', { side: next, user: myNick });
+  };
+
+  const pickSide = async (side: Stance) => {
+    if (side === mySide) return;
+    const prev = mySide;
+    setMySide(side); // optimistic — recolors the nick right away
+    declarePosition(side);
+
+    // Neutral is a stance only: it casts no vote.
+    if (side === 'N') { setVoteError(''); return; }
+
     const matchId = serverState.matchId;
     if (!matchId) return;
-    const prev = mySide;
-    setMySide(side); // optimistic — also recolors the nick
     try {
       const res = await fetch(`${getApiUrl()}/api/matches/${matchId}/vote`, {
         method: 'POST',
@@ -474,6 +491,7 @@ export default function DebateRoom() {
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         setMySide(prev);
+        declarePosition(prev ?? 'N');
         if (res.status === 401) setVoteError(t('room.signInToVote'));
         else setVoteError(data.error || t('room.couldNotVote'));
         return;
@@ -509,6 +527,7 @@ export default function DebateRoom() {
 
   const labelA = serverState.labelA || 'Red';
   const labelB = serverState.labelB || 'Blue';
+  const sideLabel = (s?: Stance | null) => (s === 'A' ? labelA : s === 'B' ? labelB : t('stance.neutral'));
 
   // Three-way support bar: red (A), blue (B), gray (undecided viewers).
   // Shares from the backend are normalized to actual voters; we spread them over all
@@ -665,7 +684,7 @@ export default function DebateRoom() {
                     <>
                       <div className="mt-2 flex items-center gap-2">
                         <button
-                          onClick={() => castVote('A')}
+                          onClick={() => pickSide('A')}
                           className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all ${voteNudge ? 'animate-vote-nudge' : ''} ${
                             mySide === 'A'
                               ? 'bg-sidea text-brand-ink glow-sidea'
@@ -675,7 +694,18 @@ export default function DebateRoom() {
                           {labelA}
                         </button>
                         <button
-                          onClick={() => castVote('B')}
+                          onClick={() => pickSide('N')}
+                          title={t('stance.neutral')}
+                          className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                            mySide === 'N'
+                              ? 'bg-white/25 text-fg'
+                              : 'bg-white/10 text-fg-muted border border-white/15 hover:bg-white/[0.16]'
+                          }`}
+                        >
+                          {t('stance.neutralShort')}
+                        </button>
+                        <button
+                          onClick={() => pickSide('B')}
                           className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all ${voteNudge ? 'animate-vote-nudge' : ''} ${
                             mySide === 'B'
                               ? 'bg-sideb text-brand-ink glow-sideb'
@@ -688,6 +718,8 @@ export default function DebateRoom() {
                       <div className="text-center text-[10px] mt-1 h-3.5">
                         {voteError ? (
                           <span className="text-rage-light">{voteError}</span>
+                        ) : mySide === 'N' ? (
+                          <span className="text-fg-faint">{t('stance.youAreNeutral')}</span>
                         ) : mySide ? (
                           <span className="text-fg-faint">{t('room.backing', { side: mySide === 'A' ? labelA : labelB })}</span>
                         ) : (
@@ -736,13 +768,22 @@ export default function DebateRoom() {
                   <span className="text-fg font-semibold">{msg.amount} ₽</span>
                 </span>
               </div>
+            ) : msg.kind === 'side_change' ? (
+              // System line: this viewer publicly switched sides.
+              <div key={msg.id} className="flex items-center gap-2 text-[11px] text-fg-faint animate-fade-in py-0.5">
+                <span className="h-px flex-1 bg-white/[0.07]" />
+                <span className="whitespace-nowrap">
+                  <span className={`font-semibold ${sideText(msg.side)}`}>{msg.user}</span>{' '}
+                  {t('stance.switched')}{' '}
+                  <span className={sideText(msg.prevSide)}>{sideLabel(msg.prevSide)}</span>
+                  {' → '}
+                  <span className={sideText(msg.side)}>{sideLabel(msg.side)}</span>
+                </span>
+                <span className="h-px flex-1 bg-white/[0.07]" />
+              </div>
             ) : (
               <div key={msg.id} className="text-[13px] break-words animate-fade-in leading-snug">
-                <span
-                  className={`font-semibold ${
-                    msg.side === 'A' ? 'text-sidea-light' : msg.side === 'B' ? 'text-sideb-light' : 'text-fg-muted'
-                  }`}
-                >
+                <span className={`font-semibold ${sideText(msg.side)}`}>
                   {msg.user}
                 </span>{' '}
                 <span className="text-fg/90">{msg.text}</span>

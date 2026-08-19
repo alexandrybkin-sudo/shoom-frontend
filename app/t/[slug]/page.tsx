@@ -18,14 +18,20 @@ interface Topic {
   battles: number;
   live: number;
 }
+type Stance = 'A' | 'B' | 'N';
 interface Post {
-  side: 'A' | 'B';
+  side: Stance;
   body: string;
+  kind?: 'post' | 'side_change';
+  prevSide?: Stance | null;
   createdAt: string;
   author: string;
   authorHandle: string | null;
   avatar: string | null;
 }
+// Nick / accent colour by stance: red, blue, or grey when neutral.
+const sideText = (s?: Stance | null) =>
+  s === 'A' ? 'text-sidea-light' : s === 'B' ? 'text-sideb-light' : 'text-fg-muted';
 
 function sessionIdentity(roomId: string): string {
   const key = `shoom-identity-${roomId}`;
@@ -46,7 +52,8 @@ export default function TopicPage() {
 
   const [topic, setTopic] = useState<Topic | null>(null);
   const [posts, setPosts] = useState<Post[]>([]);
-  const [side, setSide] = useState<'A' | 'B'>('A');
+  const [side, setSide] = useState<Stance | null>(null);
+  const [switching, setSwitching] = useState(false);
   const [body, setBody] = useState('');
   const [posting, setPosting] = useState(false);
   const [starting, setStarting] = useState(false);
@@ -55,11 +62,13 @@ export default function TopicPage() {
 
   const load = useCallback(async () => {
     try {
-      const r = await fetch(`${apiUrl()}/api/forum/topics/${slug}`, { cache: 'no-store' });
+      const r = await fetch(`${apiUrl()}/api/forum/topics/${slug}`, { cache: 'no-store', credentials: 'include' });
       if (r.ok) {
         const d = await r.json();
         setTopic(d.topic);
         setPosts(d.posts || []);
+        // Пришедшая позиция — источник правды; локальный выбор не затираем.
+        setSide((cur) => cur ?? (d.myStance ?? null));
       }
     } catch {}
   }, [slug]);
@@ -90,6 +99,33 @@ export default function TopicPage() {
       const d = await r.json();
       setFollowing(!!d.following);
     } catch {}
+  };
+
+  const sideName = (tp: Topic, s?: Stance | null) =>
+    s === 'A' ? tp.sideA : s === 'B' ? tp.sideB : t('stance.neutral');
+
+  // Declaring or switching a side. A switch lands in the thread as a system line.
+  const pickSide = async (next: Stance) => {
+    if (!user) { router.push('/login'); return; }
+    if (!topic || next === side) return;
+    const prev = side;
+    setSide(next);
+    setSwitching(true);
+    try {
+      const r = await fetch(`${apiUrl()}/api/forum/topics/${topic.id}/stance`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ side: next }),
+      });
+      if (!r.ok) { setSide(prev); return; }
+      const d = await r.json();
+      if (d.changed) await load(); // подтянуть системную запись о смене
+    } catch {
+      setSide(prev);
+    } finally {
+      setSwitching(false);
+    }
   };
 
   const submitReply = async (e: React.FormEvent) => {
@@ -208,31 +244,57 @@ export default function TopicPage() {
             ) : (
               <div className="space-y-3 mb-8">
                 {posts.map((p, i) => (
+                  p.kind === 'side_change' ? (
+                    // System line: someone publicly switched sides.
+                    <div key={i} className="flex items-center gap-2 justify-center text-[11px] text-fg-faint py-1">
+                      <span className="h-px flex-1 bg-white/[0.07]" />
+                      <span className="whitespace-nowrap">
+                        <button
+                          onClick={() => p.authorHandle && router.push(`/u/${p.authorHandle}`)}
+                          className={`font-semibold ${sideText(p.side)} ${p.authorHandle ? 'hover:underline' : ''}`}
+                        >
+                          {p.author}
+                        </button>{' '}
+                        {t('stance.switched')}{' '}
+                        <span className={sideText(p.prevSide)}>{sideName(topic, p.prevSide)}</span>
+                        {' → '}
+                        <span className={sideText(p.side)}>{sideName(topic, p.side)}</span>
+                      </span>
+                      <span className="h-px flex-1 bg-white/[0.07]" />
+                    </div>
+                  ) : (
                   <div
                     key={i}
                     className={`rounded-2xl p-3.5 border ${
-                      p.side === 'A' ? 'border-sidea/25 bg-sidea/[0.06]' : 'border-sideb/25 bg-sideb/[0.06]'
+                      p.side === 'A' ? 'border-sidea/25 bg-sidea/[0.06]'
+                      : p.side === 'B' ? 'border-sideb/25 bg-sideb/[0.06]'
+                      : 'border-white/10 bg-white/[0.03]'
                     }`}
                   >
                     <div className="flex items-center gap-2 mb-1.5">
                       {p.authorHandle ? (
                         <button
                           onClick={() => router.push(`/u/${p.authorHandle}`)}
-                          className={`text-[11px] font-semibold hover:underline ${p.side === 'A' ? 'text-sidea-light' : 'text-sideb-light'}`}
+                          className={`text-[11px] font-semibold hover:underline ${sideText(p.side)}`}
                         >
                           {p.author}
                         </button>
                       ) : (
-                        <span className={`text-[11px] font-semibold ${p.side === 'A' ? 'text-sidea-light' : 'text-sideb-light'}`}>
+                        <span className={`text-[11px] font-semibold ${sideText(p.side)}`}>
                           {p.author}
                         </span>
                       )}
-                      <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${p.side === 'A' ? 'bg-sidea/15 text-sidea-light' : 'bg-sideb/15 text-sideb-light'}`}>
-                        {p.side === 'A' ? topic.sideA : topic.sideB}
+                      <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${
+                        p.side === 'A' ? 'bg-sidea/15 text-sidea-light'
+                        : p.side === 'B' ? 'bg-sideb/15 text-sideb-light'
+                        : 'bg-white/10 text-fg-muted'
+                      }`}>
+                        {sideName(topic, p.side)}
                       </span>
                     </div>
                     <p className="text-sm text-fg/90 leading-relaxed break-words">{p.body}</p>
                   </div>
+                  )
                 ))}
               </div>
             )}
@@ -240,22 +302,35 @@ export default function TopicPage() {
             {/* Composer */}
             {user ? (
               <form onSubmit={submitReply} className="sticky bottom-4 bg-panel border border-white/10 rounded-2xl p-3">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-[11px] text-fg-muted">{t('topic.yourSide')}:</span>
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                  <span className="text-[11px] text-fg-muted">
+                    {side ? t('stance.yourPosition') : t('stance.pickFirst')}:
+                  </span>
                   <button
                     type="button"
-                    onClick={() => setSide('A')}
-                    className={`text-[11px] font-semibold px-2.5 py-1 rounded-lg transition-colors ${side === 'A' ? 'bg-sidea text-brand-ink' : 'bg-sidea/15 text-sidea-light'}`}
+                    disabled={switching}
+                    onClick={() => pickSide('A')}
+                    className={`text-[11px] font-semibold px-2.5 py-1 rounded-lg transition-colors disabled:opacity-50 ${side === 'A' ? 'bg-sidea text-brand-ink' : 'bg-sidea/15 text-sidea-light hover:bg-sidea/25'}`}
                   >
                     {topic.sideA}
                   </button>
                   <button
                     type="button"
-                    onClick={() => setSide('B')}
-                    className={`text-[11px] font-semibold px-2.5 py-1 rounded-lg transition-colors ${side === 'B' ? 'bg-sideb text-brand-ink' : 'bg-sideb/15 text-sideb-light'}`}
+                    disabled={switching}
+                    onClick={() => pickSide('N')}
+                    className={`text-[11px] font-semibold px-2.5 py-1 rounded-lg transition-colors disabled:opacity-50 ${side === 'N' ? 'bg-white/25 text-fg' : 'bg-white/10 text-fg-muted hover:bg-white/[0.16]'}`}
+                  >
+                    {t('stance.neutral')}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={switching}
+                    onClick={() => pickSide('B')}
+                    className={`text-[11px] font-semibold px-2.5 py-1 rounded-lg transition-colors disabled:opacity-50 ${side === 'B' ? 'bg-sideb text-brand-ink' : 'bg-sideb/15 text-sideb-light hover:bg-sideb/25'}`}
                   >
                     {topic.sideB}
                   </button>
+                  {side && <span className="text-[10px] text-fg-faint">{t('stance.switchHint')}</span>}
                 </div>
                 <div className="flex items-end gap-2">
                   <textarea
@@ -267,7 +342,7 @@ export default function TopicPage() {
                   />
                   <button
                     type="submit"
-                    disabled={posting || !body.trim()}
+                    disabled={posting || !body.trim() || !side}
                     aria-label={t('topic.reply')}
                     className="shrink-0 inline-flex items-center justify-center w-10 h-10 rounded-xl bg-brand text-brand-ink glow-brand disabled:opacity-50 hover:scale-105 transition-transform"
                   >
