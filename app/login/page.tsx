@@ -125,7 +125,7 @@ export default function LoginPage() {
             placeholder={t('login.email')}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className={inputCls}
+            className={`${inputCls} ym-disable-keys`}
             required
           />
           <input
@@ -133,7 +133,7 @@ export default function LoginPage() {
             placeholder={t('login.password')}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className={inputCls}
+            className={`${inputCls} ym-disable-keys`}
             required
           />
 
