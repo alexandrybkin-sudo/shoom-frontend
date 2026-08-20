@@ -23,8 +23,10 @@ COPY . .
 # --- FIX: Inject Environment Variables at Build Time ---
 ARG NEXT_PUBLIC_LIVEKIT_URL
 ARG NEXT_PUBLIC_SOCKET_URL
+ARG NEXT_PUBLIC_YM_ID
 ENV NEXT_PUBLIC_LIVEKIT_URL=$NEXT_PUBLIC_LIVEKIT_URL
 ENV NEXT_PUBLIC_SOCKET_URL=$NEXT_PUBLIC_SOCKET_URL
+ENV NEXT_PUBLIC_YM_ID=$NEXT_PUBLIC_YM_ID
 # -----------------------------------------------------
 
 # Next.js collects completely anonymous telemetry data about general usage.
