@@ -273,9 +273,9 @@ export default function SettingsPage() {
         {/* Password */}
         <section className={card}>
           <div className={sectionTitle}><Lock size={15} className="text-brand-light" /> {t('settings.password')}</div>
-          <input type="password" className={`${inputCls} mb-2`} placeholder={t('settings.currentPassword')} value={curPw} onChange={(e) => setCurPw(e.target.value)} />
-          <input type="password" className={`${inputCls} mb-2`} placeholder={t('settings.newPassword')} value={newPw} onChange={(e) => setNewPw(e.target.value)} />
-          <input type="password" className={inputCls} placeholder={t('settings.confirmPassword')} value={confirmPw} onChange={(e) => setConfirmPw(e.target.value)} />
+          <input type="password" className={`${inputCls} mb-2 ym-disable-keys`} placeholder={t('settings.currentPassword')} value={curPw} onChange={(e) => setCurPw(e.target.value)} />
+          <input type="password" className={`${inputCls} mb-2 ym-disable-keys`} placeholder={t('settings.newPassword')} value={newPw} onChange={(e) => setNewPw(e.target.value)} />
+          <input type="password" className={`${inputCls} ym-disable-keys`} placeholder={t('settings.confirmPassword')} value={confirmPw} onChange={(e) => setConfirmPw(e.target.value)} />
           <div className="flex items-center gap-3 mt-3">
             <button onClick={savePassword} disabled={pwBusy || !newPw} className={saveBtn}>
               {pwBusy ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />} {t('settings.save')}
