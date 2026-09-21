@@ -5,6 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import { ArrowLeft, Swords, MessageCircle, Users, Send, Bell, Check } from 'lucide-react';
 import { useAuth, apiUrl, moderationKey } from '../../providers';
 import { useT, LanguageSwitcher } from '../../i18n';
+import { TelegramNudge } from '../../components/TelegramNudge';
 
 interface Topic {
   id: number;
@@ -59,6 +60,7 @@ export default function TopicPage() {
   const [starting, setStarting] = useState(false);
   const [battleError, setBattleError] = useState('');
   const [following, setFollowing] = useState(false);
+  const [nudge, setNudge] = useState(0);
   const replyRef = useRef<HTMLTextAreaElement | null>(null);
 
   // The composer grows with the text (up to ~9 lines) instead of staying one row.
@@ -153,6 +155,8 @@ export default function TopicPage() {
       if (r.ok) {
         setBody('');
         await load();
+        // Peak intent: they just posted — offer Telegram notifications for replies.
+        setNudge((n) => n + 1);
       }
     } finally {
       setPosting(false);
@@ -372,6 +376,8 @@ export default function TopicPage() {
           </>
         )}
       </div>
+
+      <TelegramNudge trigger={nudge} />
     </div>
   );
 }
