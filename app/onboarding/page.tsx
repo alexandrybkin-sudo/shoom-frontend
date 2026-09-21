@@ -6,6 +6,7 @@ import { Check } from 'lucide-react';
 import { useAuth, apiUrl } from '../providers';
 import { useT } from '../i18n';
 import { CategoryIcon } from '../components/CategoryIcon';
+import { TelegramConnect } from '../components/TelegramConnect';
 
 interface Cat {
   id: number;
@@ -79,6 +80,8 @@ export default function Onboarding() {
             );
           })}
         </div>
+
+        <TelegramConnect className="mb-4" />
 
         <button
           onClick={save}

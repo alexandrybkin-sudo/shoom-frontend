@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { ArrowLeft, Check, AtSign, Lock, FileText, Globe, Camera, Loader2 } from 'lucide-react';
 import { useAuth, apiUrl, avatarSrc } from '../providers';
 import { useT } from '../i18n';
+import { TelegramConnect } from '../components/TelegramConnect';
 
 type Locale = 'en' | 'ru' | 'es';
 const BIO_MAX = 140;
@@ -269,6 +270,9 @@ export default function SettingsPage() {
             ))}
           </div>
         </section>
+
+        {/* Telegram notifications */}
+        <TelegramConnect />
 
         {/* Password */}
         <section className={card}>
