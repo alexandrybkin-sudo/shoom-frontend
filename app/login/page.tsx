@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Zap } from 'lucide-react';
 import { useAuth, apiUrl } from '../providers';
@@ -44,7 +44,7 @@ export default function LoginPage() {
     }
   };
 
-  const social = (provider: 'yandex' | 'vk') => {
+  const social = (provider: 'yandex') => {
     window.location.href = `${apiUrl()}/api/auth/${provider}`;
   };
 
@@ -82,12 +82,7 @@ export default function LoginPage() {
           >
             <YandexIcon /> {t('login.yandex')}
           </button>
-          <button
-            onClick={() => social('vk')}
-            className="w-full flex items-center justify-center gap-2.5 bg-[#0077FF] hover:bg-[#0a82ff] text-white rounded-xl py-3 text-sm font-medium transition-colors"
-          >
-            <VkIcon /> {t('login.vk')}
-          </button>
+          <TelegramLoginButton />
         </div>
 
         <div className="flex items-center gap-3 mb-5">
@@ -175,10 +170,34 @@ function YandexIcon() {
   );
 }
 
-function VkIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-      <path d="M13.16 17.3c-5.46 0-8.92-3.84-9.06-10.2h2.78c.1 4.67 2.23 6.66 3.86 7.07V7.1h2.66v3.98c1.58-.17 3.24-2 3.8-3.98h2.6a7.6 7.6 0 0 1-3.42 4.95 7.88 7.88 0 0 1 4 4.25h-2.86c-.62-1.9-2.06-3.37-4.12-3.57v3.57h-.94z" />
-    </svg>
-  );
+// Telegram Login Widget: fetches the bot username from the backend, then injects
+// Telegram's official script, which renders its own "Log in with Telegram" button.
+// On success Telegram GETs /api/auth/telegram/callback with the signed payload.
+function TelegramLoginButton() {
+  const ref = useRef<HTMLDivElement>(null);
+  const [bot, setBot] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch(`${apiUrl()}/api/auth/telegram/config`, { credentials: 'include' })
+      .then((r) => r.json())
+      .then((d) => setBot(d?.bot || null))
+      .catch(() => setBot(null));
+  }, []);
+
+  useEffect(() => {
+    if (!bot || !ref.current) return;
+    ref.current.innerHTML = '';
+    const s = document.createElement('script');
+    s.src = 'https://telegram.org/js/telegram-widget.js?22';
+    s.async = true;
+    s.setAttribute('data-telegram-login', bot);
+    s.setAttribute('data-size', 'large');
+    s.setAttribute('data-radius', '12');
+    s.setAttribute('data-request-access', 'write');
+    s.setAttribute('data-auth-url', `${apiUrl()}/api/auth/telegram/callback`);
+    ref.current.appendChild(s);
+  }, [bot]);
+
+  if (!bot) return null;
+  return <div ref={ref} className="flex justify-center" />;
 }
