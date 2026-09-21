@@ -139,7 +139,7 @@ export const messages: Record<Locale, Dict> = {
 
     'login.welcomeBack': 'Welcome back to the arena',
     'login.join': 'Join the arena',
-    'login.google': 'Continue with Google',
+    'login.yandex': 'Continue with Yandex',
     'login.vk': 'Continue with VK',
     'login.or': 'or',
     'login.displayName': 'Display name',
@@ -378,7 +378,7 @@ export const messages: Record<Locale, Dict> = {
 
     'login.welcomeBack': 'С возвращением на арену',
     'login.join': 'Вступай на арену',
-    'login.google': 'Войти через Google',
+    'login.yandex': 'Войти через Яндекс',
     'login.vk': 'Войти через VK',
     'login.or': 'или',
     'login.displayName': 'Имя',
@@ -617,7 +617,7 @@ export const messages: Record<Locale, Dict> = {
 
     'login.welcomeBack': 'Bienvenido de nuevo a la arena',
     'login.join': 'Únete a la arena',
-    'login.google': 'Continuar con Google',
+    'login.yandex': 'Continuar con Yandex',
     'login.vk': 'Continuar con VK',
     'login.or': 'o',
     'login.displayName': 'Nombre',
