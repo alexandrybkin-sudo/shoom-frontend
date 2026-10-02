@@ -61,6 +61,7 @@ export default function TopicPage() {
   const [battleError, setBattleError] = useState('');
   const [following, setFollowing] = useState(false);
   const [nudge, setNudge] = useState(0);
+  const [sort, setSort] = useState<'old' | 'new'>('old');
   const replyRef = useRef<HTMLTextAreaElement | null>(null);
 
   // The composer grows with the text (up to ~9 lines) instead of staying one row.
@@ -74,7 +75,7 @@ export default function TopicPage() {
 
   const load = useCallback(async () => {
     try {
-      const r = await fetch(`${apiUrl()}/api/forum/topics/${slug}`, { cache: 'no-store', credentials: 'include' });
+      const r = await fetch(`${apiUrl()}/api/forum/topics/${slug}?sort=${sort}`, { cache: 'no-store', credentials: 'include' });
       if (r.ok) {
         const d = await r.json();
         setTopic(d.topic);
@@ -83,7 +84,7 @@ export default function TopicPage() {
         setSide((cur) => cur ?? (d.myStance ?? null));
       }
     } catch {}
-  }, [slug]);
+  }, [slug, sort]);
 
   useEffect(() => {
     load();
@@ -251,6 +252,23 @@ export default function TopicPage() {
               <Swords size={18} /> {t('topic.startBattle')}
             </button>
             {battleError && <p className="text-xs text-rage-light text-center -mt-6 mb-8">{battleError}</p>}
+
+            {/* Sort toggle */}
+            {posts.length > 1 && (
+              <div className="flex items-center gap-1.5 mb-3">
+                {(['old', 'new'] as const).map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => setSort(s)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
+                      sort === s ? 'bg-brand text-brand-ink' : 'bg-panel border border-white/10 text-fg-muted hover:text-fg'
+                    }`}
+                  >
+                    {t(s === 'old' ? 'topic.sortOld' : 'topic.sortNew')}
+                  </button>
+                ))}
+              </div>
+            )}
 
             {/* Posts */}
             {posts.length === 0 ? (
