@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, GraduationCap, Send, Timer, Trophy, Check, X, Lightbulb, Loader2 } from 'lucide-react';
+import { ArrowLeft, GraduationCap, Send, Timer, Trophy, Check, X, Lightbulb, Loader2, Play, Mic, Square } from 'lucide-react';
 import { useAuth, apiUrl } from '../providers';
 import { useT, LanguageSwitcher } from '../i18n';
 
@@ -23,10 +23,13 @@ export default function CoachPage() {
   const [starting, setStarting] = useState(false);
   const [cfg, setCfg] = useState<Setup | null>(null);
   const [messages, setMessages] = useState<Msg[]>([]);
-  const [turn, setTurn] = useState<'human' | 'ai'>('human');
+  const [turn, setTurn] = useState<'reading' | 'human' | 'ai'>('reading');
   const [timeLeft, setTimeLeft] = useState(0);
   const [round, setRound] = useState(1);
   const [review, setReview] = useState<Review | null>(null);
+  const [recording, setRecording] = useState(false);
+  const recRef = useRef<any>(null);
+  const speechSupported = typeof window !== 'undefined' && !!((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
 
   // Refs for values read inside timers / async (avoid stale closures).
   const taRef = useRef<HTMLTextAreaElement | null>(null);
@@ -65,9 +68,16 @@ export default function CoachPage() {
       setRound(1); roundRef.current = 1;
       setReview(null);
       setPhase('debate');
-      setTurn('human');
+      setTurn('reading'); // let them read the topic + sides before the clock starts
       setTimeLeft(seconds);
     } catch { setStarting(false); }
+  };
+
+  // Human presses this when done reading — only now does their answer clock start.
+  const startTurn = () => {
+    if (!cfgRef.current) return;
+    setTimeLeft(cfgRef.current.seconds);
+    setTurn('human');
   };
 
   const sideLabel = (s: Side) => (cfg ? (s === 'A' ? cfg.sideA : cfg.sideB) : '');
@@ -76,6 +86,8 @@ export default function CoachPage() {
     if (busyRef.current) return;
     const c = cfgRef.current;
     if (!c) return;
+    try { recRef.current?.stop(); } catch {}
+    setRecording(false);
     busyRef.current = true;
     const text = (taRef.current?.value || '').trim();
     if (taRef.current) taRef.current.value = '';
@@ -98,13 +110,12 @@ export default function CoachPage() {
       if (roundRef.current < c.rounds) {
         const next = roundRef.current + 1;
         setRound(next); roundRef.current = next;
-        setTimeLeft(c.seconds);
-        setTurn('human');
+        setTurn('reading'); // read the opponent's reply before the next clock starts
       } else {
         await doReview(hist2);
       }
     } catch {
-      setTurn('human'); setTimeLeft(c.seconds);
+      setTurn('reading');
     } finally {
       busyRef.current = false;
     }
@@ -125,6 +136,38 @@ export default function CoachPage() {
   };
 
   const reset = () => { setPhase('setup'); setCfg(null); setMessages([]); setReview(null); };
+
+  // Voice input (browser Web Speech API). Transcribes into the answer box; the AI
+  // still replies in text. Hidden where unsupported (falls back to typing).
+  const recLang = locale === 'en' ? 'en-US' : locale === 'es' ? 'es-ES' : 'ru-RU';
+  const toggleRec = () => {
+    if (recording) { try { recRef.current?.stop(); } catch {} return; }
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR) return;
+    const rec = new SR();
+    rec.lang = recLang;
+    rec.interimResults = true;
+    rec.continuous = true;
+    let base = taRef.current?.value ? taRef.current.value.trim() + ' ' : '';
+    rec.onresult = (e: any) => {
+      let interim = '', final = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const tr = e.results[i][0].transcript;
+        if (e.results[i].isFinal) final += tr; else interim += tr;
+      }
+      if (final) base += final;
+      if (taRef.current) taRef.current.value = (base + interim).replace(/\s+/g, ' ').trimStart();
+    };
+    rec.onend = () => { setRecording(false); recRef.current = null; };
+    rec.onerror = () => { setRecording(false); };
+    recRef.current = rec;
+    setRecording(true);
+    try { rec.start(); } catch { setRecording(false); }
+  };
+
+  // Stop listening whenever it's not the human's turn, and on unmount.
+  useEffect(() => { if (turn !== 'human') { try { recRef.current?.stop(); } catch {} } }, [turn]);
+  useEffect(() => () => { try { recRef.current?.stop(); } catch {} }, []);
 
   const mmss = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 
@@ -193,15 +236,19 @@ export default function CoachPage() {
 
             <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-3 pr-1 min-h-0">
               {messages.map((m, i) => (
-                <div key={i} className={`flex ${m.role === 'human' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-[14px] leading-relaxed ${m.role === 'human' ? 'bg-brand text-brand-ink rounded-br-md' : 'bg-panel border border-white/[0.07] rounded-bl-md'}`}>
+                <div key={i} className={`flex items-end gap-2 ${m.role === 'human' ? 'justify-end' : 'justify-start'}`}>
+                  {m.role === 'ai' && <KnightAvatar />}
+                  <div className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-[14px] leading-relaxed ${m.role === 'human' ? 'bg-brand text-brand-ink rounded-br-md' : 'bg-panel border border-white/[0.07] rounded-bl-md'}`}>
                     {m.role === 'ai' && <p className="text-[10px] uppercase tracking-wider text-fg-faint mb-1 font-semibold">{t('coach.opponent')}</p>}
                     {m.text}
                   </div>
                 </div>
               ))}
               {turn === 'ai' && phase === 'debate' && (
-                <div className="flex justify-start"><div className="bg-panel border border-white/[0.07] rounded-2xl rounded-bl-md px-4 py-3 text-fg-muted text-sm inline-flex items-center gap-2"><Loader2 size={14} className="animate-spin" /> {t('coach.thinking')}</div></div>
+                <div className="flex items-end gap-2 justify-start">
+                  <KnightAvatar />
+                  <div className="bg-panel border border-white/[0.07] rounded-2xl rounded-bl-md px-4 py-3 text-fg-muted text-sm inline-flex items-center gap-2"><Loader2 size={14} className="animate-spin" /> {t('coach.thinking')}</div>
+                </div>
               )}
               {phase === 'reviewing' && (
                 <div className="flex justify-center py-6"><div className="text-fg-muted text-sm inline-flex items-center gap-2"><Loader2 size={16} className="animate-spin" /> {t('coach.finishing')}</div></div>
@@ -210,23 +257,41 @@ export default function CoachPage() {
 
             {phase === 'debate' && (
               <div className="shrink-0 mt-3">
-                <div className="flex items-center gap-2 mb-2">
-                  <Timer size={14} className={timeLeft <= 10 && turn === 'human' ? 'text-rage-light' : 'text-fg-muted'} />
-                  <div className="flex-1 h-1.5 rounded-full bg-panel-2 overflow-hidden">
-                    <div className={`h-full rounded-full transition-all duration-1000 ease-linear ${timeLeft <= 10 ? 'bg-rage' : 'bg-brand'}`} style={{ width: `${turn === 'human' ? (timeLeft / cfg.seconds) * 100 : 0}%` }} />
+                {turn === 'reading' ? (
+                  <div className="flex flex-col items-center gap-2.5 py-2">
+                    <p className="text-xs text-fg-muted text-center">{t('coach.readHint')}</p>
+                    <button onClick={startTurn}
+                      className="inline-flex items-center gap-2 bg-brand text-brand-ink font-semibold px-6 py-3 rounded-xl transition-all hover:scale-[1.03] active:scale-[0.99] glow-brand">
+                      <Play size={16} /> {t('coach.myTurn')} · {mmss(cfg.seconds)}
+                    </button>
                   </div>
-                  <span className={`text-xs font-mono tabular-nums ${timeLeft <= 10 && turn === 'human' ? 'text-rage-light' : 'text-fg-muted'}`}>{turn === 'human' ? mmss(Math.max(0, timeLeft)) : '0:00'}</span>
-                </div>
-                <div className="flex items-end gap-2">
-                  <textarea ref={taRef} rows={2} disabled={turn !== 'human'}
-                    placeholder={turn === 'human' ? t('coach.yourTurn') : t('coach.waitTurn')}
-                    onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); submit(false); } }}
-                    className="flex-1 bg-panel border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-fg placeholder-fg-faint focus:outline-none focus:border-brand transition-colors resize-none disabled:opacity-50" />
-                  <button onClick={() => submit(false)} disabled={turn !== 'human'}
-                    className="shrink-0 bg-brand text-brand-ink font-semibold rounded-xl px-4 py-2.5 transition-all hover:scale-[1.03] disabled:opacity-40 disabled:hover:scale-100 inline-flex items-center gap-1.5">
-                    <Send size={15} /> {t('coach.send')}
-                  </button>
-                </div>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-2 mb-2">
+                      <Timer size={14} className={timeLeft <= 10 && turn === 'human' ? 'text-rage-light' : 'text-fg-muted'} />
+                      <div className="flex-1 h-1.5 rounded-full bg-panel-2 overflow-hidden">
+                        <div className={`h-full rounded-full transition-all duration-1000 ease-linear ${timeLeft <= 10 ? 'bg-rage' : 'bg-brand'}`} style={{ width: `${turn === 'human' ? (timeLeft / cfg.seconds) * 100 : 0}%` }} />
+                      </div>
+                      <span className={`text-xs font-mono tabular-nums ${timeLeft <= 10 && turn === 'human' ? 'text-rage-light' : 'text-fg-muted'}`}>{turn === 'human' ? mmss(Math.max(0, timeLeft)) : '0:00'}</span>
+                    </div>
+                    <div className="flex items-end gap-2">
+                      <textarea ref={taRef} rows={2} disabled={turn !== 'human'}
+                        placeholder={recording ? t('coach.listening') : turn === 'human' ? t('coach.yourTurn') : t('coach.waitTurn')}
+                        onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); submit(false); } }}
+                        className="flex-1 bg-panel border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-fg placeholder-fg-faint focus:outline-none focus:border-brand transition-colors resize-none disabled:opacity-50" />
+                      {speechSupported && (
+                        <button onClick={toggleRec} disabled={turn !== 'human'} aria-label={t('coach.mic')} title={t('coach.mic')}
+                          className={`shrink-0 rounded-xl p-2.5 transition-all disabled:opacity-40 ${recording ? 'bg-rage text-white animate-pulse' : 'bg-panel-2 border border-white/10 text-fg-muted hover:text-fg'}`}>
+                          {recording ? <Square size={16} /> : <Mic size={16} />}
+                        </button>
+                      )}
+                      <button onClick={() => submit(false)} disabled={turn !== 'human'}
+                        className="shrink-0 bg-brand text-brand-ink font-semibold rounded-xl px-4 py-2.5 transition-all hover:scale-[1.03] disabled:opacity-40 disabled:hover:scale-100 inline-flex items-center gap-1.5">
+                        <Send size={15} /> {t('coach.send')}
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </>
@@ -260,6 +325,22 @@ export default function CoachPage() {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// The Shoom knight (same mark as the logo easter egg) — the AI opponent's avatar.
+function KnightAvatar() {
+  return (
+    <div className="shrink-0 w-8 h-8 rounded-xl bg-panel-2 border border-white/10 flex items-center justify-center mb-0.5" aria-hidden>
+      <svg width="18" height="20" viewBox="0 0 38 42" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M19 2 C 24 4, 24 9, 19 12" stroke="#A06BFF" strokeWidth="3" strokeLinecap="round" />
+        <rect x="29.5" y="3" width="2.4" height="17" rx="1.2" fill="#E8EAF0" transform="rotate(22 30.7 11.5)" />
+        <rect x="26" y="15.5" width="8" height="2.6" rx="1.3" fill="#A06BFF" transform="rotate(22 30 16.8)" />
+        <rect x="11" y="9" width="16" height="19" rx="7.5" fill="#C7CBD4" />
+        <rect x="14.5" y="15" width="9" height="2.8" rx="1.4" fill="#2A2F3A" />
+        <rect x="14.5" y="19.5" width="9" height="2.2" rx="1.1" fill="#2A2F3A" />
+      </svg>
     </div>
   );
 }
