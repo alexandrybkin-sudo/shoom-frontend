@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, GraduationCap, Send, Timer, Trophy, Check, X, Lightbulb, Loader2, Play, Mic, Square } from 'lucide-react';
+import { ArrowLeft, GraduationCap, Send, Timer, Trophy, Check, X, Lightbulb, Loader2, Play, Mic, Square, Keyboard } from 'lucide-react';
 import { useAuth, apiUrl } from '../providers';
 import { useT, LanguageSwitcher } from '../i18n';
 
@@ -10,7 +10,8 @@ type Side = 'A' | 'B';
 type Msg = { role: 'human' | 'ai'; text: string };
 type Phase = 'setup' | 'debate' | 'reviewing' | 'review';
 interface Review { score: number; summary: string; strengths: string[]; mistakes: string[]; tips: string[]; }
-interface Setup { topic: string; sideA: string; sideB: string; humanSide: Side; aiSide: Side; rounds: number; seconds: number; }
+type Mode = 'text' | 'voice';
+interface Setup { topic: string; sideA: string; sideB: string; humanSide: Side; aiSide: Side; rounds: number; seconds: number; mode: Mode; }
 
 export default function CoachPage() {
   const router = useRouter();
@@ -20,6 +21,8 @@ export default function CoachPage() {
   const [phase, setPhase] = useState<Phase>('setup');
   const [rounds, setRounds] = useState(3);
   const [seconds, setSeconds] = useState(90);
+  const [mode, setMode] = useState<Mode>('voice');
+  const [draft, setDraft] = useState('');
   const [starting, setStarting] = useState(false);
   const [cfg, setCfg] = useState<Setup | null>(null);
   const [messages, setMessages] = useState<Msg[]>([]);
@@ -32,13 +35,14 @@ export default function CoachPage() {
   const speechSupported = typeof window !== 'undefined' && !!((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
 
   // Refs for values read inside timers / async (avoid stale closures).
-  const taRef = useRef<HTMLTextAreaElement | null>(null);
+  const draftRef = useRef('');
   const busyRef = useRef(false);
   const msgRef = useRef<Msg[]>([]);
   const roundRef = useRef(1);
   const cfgRef = useRef<Setup | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
+  useEffect(() => { draftRef.current = draft; }, [draft]);
   useEffect(() => { msgRef.current = messages; }, [messages]);
   useEffect(() => { roundRef.current = round; }, [round]);
   useEffect(() => { cfgRef.current = cfg; }, [cfg]);
@@ -62,8 +66,9 @@ export default function CoachPage() {
       });
       if (!r.ok) { setStarting(false); if (r.status === 401) router.push('/login'); return; }
       const d = await r.json();
-      const setup: Setup = { topic: d.topic, sideA: d.sideA, sideB: d.sideB, humanSide: d.humanSide, aiSide: d.aiSide, rounds, seconds };
+      const setup: Setup = { topic: d.topic, sideA: d.sideA, sideB: d.sideB, humanSide: d.humanSide, aiSide: d.aiSide, rounds, seconds, mode: speechSupported ? mode : 'text' };
       setCfg(setup); cfgRef.current = setup;
+      setDraft(''); draftRef.current = '';
       setMessages([]); msgRef.current = [];
       setRound(1); roundRef.current = 1;
       setReview(null);
@@ -76,6 +81,7 @@ export default function CoachPage() {
   // Human presses this when done reading — only now does their answer clock start.
   const startTurn = () => {
     if (!cfgRef.current) return;
+    setDraft(''); draftRef.current = '';
     setTimeLeft(cfgRef.current.seconds);
     setTurn('human');
   };
@@ -89,8 +95,8 @@ export default function CoachPage() {
     try { recRef.current?.stop(); } catch {}
     setRecording(false);
     busyRef.current = true;
-    const text = (taRef.current?.value || '').trim();
-    if (taRef.current) taRef.current.value = '';
+    const text = draftRef.current.trim();
+    setDraft(''); draftRef.current = '';
     const human: Msg = { role: 'human', text: text || (auto ? t('coach.missed') : '—') };
     const hist = [...msgRef.current, human];
     setMessages(hist); msgRef.current = hist;
@@ -148,7 +154,7 @@ export default function CoachPage() {
     rec.lang = recLang;
     rec.interimResults = true;
     rec.continuous = true;
-    let base = taRef.current?.value ? taRef.current.value.trim() + ' ' : '';
+    let base = draftRef.current ? draftRef.current.trim() + ' ' : '';
     rec.onresult = (e: any) => {
       let interim = '', final = '';
       for (let i = e.resultIndex; i < e.results.length; i++) {
@@ -156,7 +162,7 @@ export default function CoachPage() {
         if (e.results[i].isFinal) final += tr; else interim += tr;
       }
       if (final) base += final;
-      if (taRef.current) taRef.current.value = (base + interim).replace(/\s+/g, ' ').trimStart();
+      setDraft((base + interim).replace(/\s+/g, ' ').trimStart());
     };
     rec.onend = () => { setRecording(false); recRef.current = null; };
     rec.onerror = () => { setRecording(false); };
@@ -209,6 +215,22 @@ export default function CoachPage() {
                       className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-colors ${seconds === n ? 'bg-brand text-brand-ink' : 'bg-panel-2 border border-white/10 text-fg-muted hover:text-fg'}`}>{mmss(n)}</button>
                   ))}
                 </div>
+              </div>
+              <div>
+                <p className="text-xs text-fg-muted mb-2">{t('coach.answerMode')}</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <button onClick={() => setMode('voice')} disabled={!speechSupported}
+                    className={`flex flex-col items-center gap-1.5 py-3.5 rounded-xl border transition-colors disabled:opacity-40 ${mode === 'voice' && speechSupported ? 'bg-brand/15 border-brand' : 'bg-panel-2 border-white/10 text-fg-muted hover:text-fg'}`}>
+                    <Mic size={20} className={mode === 'voice' && speechSupported ? 'text-brand-light' : ''} />
+                    <span className="text-sm font-semibold">{t('coach.modeVoice')}</span>
+                  </button>
+                  <button onClick={() => setMode('text')}
+                    className={`flex flex-col items-center gap-1.5 py-3.5 rounded-xl border transition-colors ${mode === 'text' ? 'bg-brand/15 border-brand' : 'bg-panel-2 border-white/10 text-fg-muted hover:text-fg'}`}>
+                    <Keyboard size={20} className={mode === 'text' ? 'text-brand-light' : ''} />
+                    <span className="text-sm font-semibold">{t('coach.modeText')}</span>
+                  </button>
+                </div>
+                {!speechSupported && <p className="text-[11px] text-fg-faint mt-1.5">{t('coach.voiceUnsupported')}</p>}
               </div>
             </div>
 
@@ -267,29 +289,46 @@ export default function CoachPage() {
                   </div>
                 ) : (
                   <>
-                    <div className="flex items-center gap-2 mb-2">
+                    <div className="flex items-center gap-2 mb-2.5">
                       <Timer size={14} className={timeLeft <= 10 && turn === 'human' ? 'text-rage-light' : 'text-fg-muted'} />
                       <div className="flex-1 h-1.5 rounded-full bg-panel-2 overflow-hidden">
                         <div className={`h-full rounded-full transition-all duration-1000 ease-linear ${timeLeft <= 10 ? 'bg-rage' : 'bg-brand'}`} style={{ width: `${turn === 'human' ? (timeLeft / cfg.seconds) * 100 : 0}%` }} />
                       </div>
                       <span className={`text-xs font-mono tabular-nums ${timeLeft <= 10 && turn === 'human' ? 'text-rage-light' : 'text-fg-muted'}`}>{turn === 'human' ? mmss(Math.max(0, timeLeft)) : '0:00'}</span>
                     </div>
-                    <div className="flex items-end gap-2">
-                      <textarea ref={taRef} rows={2} disabled={turn !== 'human'}
-                        placeholder={recording ? t('coach.listening') : turn === 'human' ? t('coach.yourTurn') : t('coach.waitTurn')}
-                        onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); submit(false); } }}
-                        className="flex-1 bg-panel border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-fg placeholder-fg-faint focus:outline-none focus:border-brand transition-colors resize-none disabled:opacity-50" />
-                      {speechSupported && (
-                        <button onClick={toggleRec} disabled={turn !== 'human'} aria-label={t('coach.mic')} title={t('coach.mic')}
-                          className={`shrink-0 rounded-xl p-2.5 transition-all disabled:opacity-40 ${recording ? 'bg-rage text-white animate-pulse' : 'bg-panel-2 border border-white/10 text-fg-muted hover:text-fg'}`}>
-                          {recording ? <Square size={16} /> : <Mic size={16} />}
+
+                    {cfg.mode === 'text' ? (
+                      /* TEXT MODE — typing */
+                      <div className="flex items-end gap-2">
+                        <textarea value={draft} onChange={(e) => setDraft(e.target.value)} rows={2} disabled={turn !== 'human'}
+                          placeholder={turn === 'human' ? t('coach.yourTurn') : t('coach.waitTurn')}
+                          onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); submit(false); } }}
+                          className="flex-1 bg-panel border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-fg placeholder-fg-faint focus:outline-none focus:border-brand transition-colors resize-none disabled:opacity-50" />
+                        <button onClick={() => submit(false)} disabled={turn !== 'human'}
+                          className="shrink-0 bg-brand text-brand-ink font-semibold rounded-xl px-4 py-2.5 transition-all hover:scale-[1.03] disabled:opacity-40 disabled:hover:scale-100 inline-flex items-center gap-1.5">
+                          <Send size={15} /> {t('coach.send')}
                         </button>
-                      )}
-                      <button onClick={() => submit(false)} disabled={turn !== 'human'}
-                        className="shrink-0 bg-brand text-brand-ink font-semibold rounded-xl px-4 py-2.5 transition-all hover:scale-[1.03] disabled:opacity-40 disabled:hover:scale-100 inline-flex items-center gap-1.5">
-                        <Send size={15} /> {t('coach.send')}
-                      </button>
-                    </div>
+                      </div>
+                    ) : (
+                      /* VOICE MODE — speak */
+                      <div className="flex flex-col items-center gap-3">
+                        <div className="w-full min-h-[52px] rounded-xl bg-panel border border-white/10 px-3.5 py-2.5 text-sm leading-relaxed">
+                          {draft ? draft : <span className="text-fg-faint">{recording ? t('coach.listening') : t('coach.tapToSpeak')}</span>}
+                        </div>
+                        <div className="flex items-center gap-4">
+                          <button onClick={toggleRec} disabled={turn !== 'human'} aria-label={t('coach.mic')}
+                            className={`relative shrink-0 w-16 h-16 rounded-full flex items-center justify-center transition-all disabled:opacity-40 ${recording ? 'bg-rage text-white scale-105' : 'bg-brand text-brand-ink glow-brand hover:scale-105'}`}>
+                            {recording && <span className="absolute inset-0 rounded-full bg-rage/40 animate-ping" />}
+                            <span className="relative">{recording ? <Square size={24} /> : <Mic size={26} />}</span>
+                          </button>
+                          <button onClick={() => submit(false)} disabled={turn !== 'human' || !draft.trim()}
+                            className="shrink-0 bg-panel-2 border border-white/15 text-fg font-semibold rounded-xl px-5 py-3 transition-all hover:border-white/30 disabled:opacity-40 inline-flex items-center gap-1.5">
+                            <Send size={16} /> {t('coach.send')}
+                          </button>
+                        </div>
+                        <p className="text-[11px] text-fg-faint">{recording ? t('coach.tapToStop') : t('coach.tapToSpeak')}</p>
+                      </div>
+                    )}
                   </>
                 )}
               </div>
