@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { Zap, Eye, Plus, Flame, LogOut, MessageCircle, Users, Swords, Clock, Settings } from 'lucide-react';
+import { Zap, Eye, Plus, Flame, LogOut, MessageCircle, Users, Swords, Clock, Settings, GraduationCap, ChevronRight } from 'lucide-react';
 import { useAuth, apiUrl, avatarSrc } from './providers';
 import { useT, LanguageSwitcher } from './i18n';
 import { CategoryIcon } from './components/CategoryIcon';
@@ -206,6 +206,21 @@ export default function Home() {
 
       <div className="px-6 pb-20">
         <div className="max-w-5xl mx-auto space-y-12">
+          {/* AI debate coach entry */}
+          <button
+            onClick={() => router.push('/coach')}
+            className="group w-full flex items-center gap-4 text-left rounded-2xl p-4 md:p-5 bg-gradient-to-r from-brand/15 to-brand/5 border border-brand/25 hover:border-brand/50 transition-colors glow-brand"
+          >
+            <div className="shrink-0 w-12 h-12 rounded-xl bg-brand/20 text-brand-light flex items-center justify-center">
+              <GraduationCap size={26} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold">{t('coach.title')}</p>
+              <p className="text-[13px] text-fg-muted truncate">{t('coach.homeTeaser')}</p>
+            </div>
+            <ChevronRight size={20} className="shrink-0 text-fg-faint group-hover:text-brand-light transition-colors" />
+          </button>
+
           {/* Debates: Live / Waiting toggle — live first, waiting second (priority over scheduled) */}
           {data.liveBattles.length > 0 && (() => {
             const live = data.liveBattles.filter((b) => b.isLive);
